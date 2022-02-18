@@ -10,6 +10,7 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
 * [github.com/jetstack/cert-manager](https://github.com/jetstack/cert-manager)
 * [kubernetes.github.io/ingress-nginx/](https://kubernetes.github.io/ingress-nginx/)
 * [github.com/bitnami-labs/sealed-secrets](https://github.com/bitnami-labs/sealed-secrets)
+* [kustomize.io](https://kustomize.io)
 
 ![Double Dragon](https://static.wixstatic.com/media/cf1e64_4736286d1baa49ee99802212ada59dee~mv2.png/v1/fill/w_498,h_664,al_c,usm_0.66_1.00_0.01/cf1e64_4736286d1baa49ee99802212ada59dee~mv2.png "arcade!")
 
@@ -17,12 +18,6 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
 
 * Ivar Abrahamsen : [@flurdy](https://twitter.com/flurdy) : [github.com/flurdy](https://github.com/flurdy) : [eray.uk](https://eray.uk)
 
-
-## Versions
-
-* 2021-07-10 Flux 2. Lemmings => Double Dragon
-* 2020-02-13 Flux 1.1, fluxcd.io annotations, and Helm 3
-* 2019-11-07 Flux 0.16, flux.weave.works annotations and Helm 2
 
 ## Flux version
 
@@ -44,24 +39,27 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
 
 ### Fork/Clone repository
 
-Fork the Double Dragon repo as your own.
-
-E.g. with [Github CLI](https://cli.github.com):
-
+* Keep a local copy of Double Dragon.
+  E.g. with [Github CLI](https://cli.github.com):
 
       brew install gh;
       gh auth login;
-      gh repo clone flurdy/doubledragon my-doubledragon;
-      cd my-doubledragon;
-      rm -rf .git;
+      gh repo clone flurdy/doubledragon;
+
+* Initialize an empty repo for your setup.
+
+      mkdir doubledragon-fleet;
+      cd doubledragon-fleet;
+      cp ../doubledragon/README.md
+      cp ../doubledragon/LICENSE .
       git init;
       git add README.md LICENSE;
-      git commit -m "Starting double dragon"
-      gh repo create --private my-doubledragon;
+      git commit -m "Starting our double dragon fleet"
+      gh repo create --private doubledragon-fleet;
       git push -u origin main
 
-* Replace _my-doubledragon_ with whatever you want to call your cluster
-* Initially a mostly empty repo
+* Replace _doubledragon-fleet_ with whatever you want to call your repository
+
 * Flux can also talk to Bitbucket, Gitlab, Github Enterprise and self-hosted git repositories
 
 ### Install Flux CLI
@@ -69,10 +67,28 @@ E.g. with [Github CLI](https://cli.github.com):
 *
       brew install fluxcd/tap/flux
 
-* Test if Flux can be installed on your cluster
+* Test if Flux ir ready to be installed on your cluster
 
       flux check --pre
 
+
+### Install Flux on your cluster
+
+*
+      flux bootstrap github \
+        --components-extra=image-reflector-controller,image-automation-controller \
+        --owner=$GITHUB_USER \
+        --repository=doubledragon-fleet \
+        --branch=main \
+        --path=./clusters/my-doubledragon-01 \
+        --personal
+
+* This assumes the repo is called _doubledragon-fleet_ (it will create it if it does not exist).
+   And names your initial cluster as _my-doubledragon-01_.
+   Change as appropriate
+
+*
+      git pull
 
 ### File structure
 
@@ -82,7 +98,10 @@ Flux v2 is more flexible with potentially many clusters per repo
 Flux v2 also prefer to use [Kustomize](https://kustomize.io),
 but you do not have to use it.
 
-So a repo can look like this at the start:
+Flux can act directly in your cluster,
+but this setup does everything via config files and git.
+
+So a Flux repo may look like this at the start:
 
     |-- apps
     |   |-- base
@@ -94,39 +113,134 @@ So a repo can look like this at the start:
     |   |-- sources
 
 
-* `apps/base` is where you define your apps. Deploymentst, services, etc.
+* `apps/base` is where you define your apps; deployments, services, etc.
 * `apps/overlays/clustername` is where you choose which apps a cluster has.
 * `cluster/clustername` with links to apps and infrastructure active in your cluster.
 * `infrastructure/sources` where to find images from registries, Helm repos, etc.
 
+* Create some of these folders:
 
+      mkdir -p apps/base;
 
-Create cluster folders:
+      mkdir -p apps/overlays/my-doubledragon;
 
-    mkdir -p apps/overlays/my-doubledragon
+      mkdir -p infrastructure/sources
 
+* Check the file structure
 
-### Install Flux
+      tree
 
-    flux bootstrap github \
-      --components-extra=image-reflector-controller,image-automation-controller \
-      --owner=$GITHUB_USER \
-      --repository=my-doubledragon \
-      --branch=main \
-      --path=./clusters/my-doubledragon-01 \
-      --personal
+### Sealed Secrets
+
+* Add a Helm repository for Sealed Secrets
+
+      flux create source helm sealed-secrets \
+        --interval=1h \
+        --url=https://bitnami-labs.github.io/sealed-secrets \
+        --export > infrastructure/sources/sealed-secrets-source.yaml
+
+* Install Helm chart
+
+      mkdir -p infrastructure/sealed-secrets;
+
+      flux create helmrelease sealed-secrets \
+        --interval=1h \
+        --release-name=sealed-secrets-controller \
+        --target-namespace=flux-system \
+        --source=HelmRepository/sealed-secrets \
+        --chart=sealed-secrets \
+        --chart-version=">=1.15.0-0" \
+        --crds=CreateReplace \
+        --export > infrastructure/sealed-secrets/sealed-secrets.yaml;
+
+      touch infrastructure/sealed-secrets/kustomization.yaml
+
+* Push to git so Flux can act on it
+
+      git add infrastructure/sources/sealed-secrets-source.yaml \
+        infrastructure/sealed-secrets/sealed-secrets.yaml \
+        infrastructure/sealed-secrets/kustomization.yaml;
+      git commit -m "Added Sealed Secrets";
+      git push
+
+* Install CLI
+
+      brew install kubeseal
+
+* Retrieve public key
+
+      mkdir /clusters/my-doubledragon-01/secrets;
+
+      kubeseal --fetch-cert \
+        --controller-name=sealed-secrets-controller \
+        --controller-namespace=flux-system \
+        > /clusters/my-doubledragon-01/secrets/pub-sealed-secrets.pem
+
+  * Some cluster setups may block access to your sealed-secrets-controller,
+e.g. a GKE cluster.
+
+     So instead we can temporarily proxy that locally like this:
+
+        kubectl --namespace flux-system port-forward \
+          service/sealed-secrets-controller 8081:8080
+
+  * And use `curl` to download the certificate instead:
+
+        curl localhost:8081/v1/cert.pem \
+          > /clusters/my-doubledragon-01/secrets/pub-sealed-secrets.pem
+
+* Add it to source control
+
+      git add clusters/my-doubledragon-01/secrets/pub-sealed-secrets.pem
+
+### Nginx Ingress
+
+* Add a Helm repository
+
+      flux create source helm sealed-secrets \
+        --interval=1h \
+        --url=https://kubernetes.github.io/ingress-nginx \
+        --export > infrastructure/sources/ingress-nginx-source.yaml
+
+* Install Helm chart
+
+      mkdir -p infrastructure/ingress-nginx;
+
+      flux create helmrelease ingress-nginx \
+        --interval=1h \
+        --release-name=ingress-nginx \
+        --target-namespace=flux-system \
+        --source=HelmRepository/ingress-nginx-source \
+        --chart=ingress-nginx \
+        --chart-version=">=1.0-4" \
+        --crds=CreateReplace \
+        --export > infrastructure/ingress-nginx/ingress-nginx.yaml;
+
 
 
 ### Cert Manager
 
-
-### Sealed Secrets
-
+* Coming soon...
 ### Container Registries
 
-## Your GitOps based Kubernetes cluster is live!
+To access private Docker container image repositories
+we need to setup some more sources, image sources.
+And some secrets to access those.
+
+
+* [flurdy's 'kubernetes-docker-registry.html](https://flurdy.com/docs/kubernetes/registry/kubernetes-docker-registry.html)
+
+
+
+* Create
+
+
+
+__Your GitOps based Kubernetes cluster is live!__
 
 If you waited a few minutes then your GitOps configured Kubernetes cluster is now live.
+
+But with no apps running.
 
 ## Your first application
 
@@ -206,3 +320,11 @@ If you waited a few minutes then your GitOps configured Kubernetes cluster is no
 
 * Certain operation takes a few minutes, e.g. pod creation.
 * Client tools are also available on Linux, Windows and more.
+
+
+
+## Versions
+
+* 2021-07-10 Flux 2. Lemmings => Double Dragon
+* 2020-02-13 Flux 1.1, fluxcd.io annotations, and Helm 3
+* 2019-11-07 Flux 0.16, flux.weave.works annotations and Helm 2
