@@ -160,47 +160,95 @@ So a Flux repo may look like this at the start:
 
 * Add a Helm repository for Sealed Secrets
 
-      flux create source helm sealed-secrets \
+      flux create source helm sealed-secrets-source \
         --interval=1h \
         --url=https://bitnami-labs.github.io/sealed-secrets \
         --export > infrastructure/sources/sealed-secrets-source.yaml
 
 * Install Helm chart
 
-      mkdir -p infrastructure/sealed-secrets;
+      mkdir infrastructure/sealed-secrets;
 
       flux create helmrelease sealed-secrets \
         --interval=1h \
         --release-name=sealed-secrets-controller \
         --target-namespace=flux-system \
-        --source=HelmRepository/sealed-secrets \
+        --source=HelmRepository/sealed-secrets-source \
         --chart=sealed-secrets \
         --chart-version=">=1.15.0-0" \
         --crds=CreateReplace \
         --export > infrastructure/sealed-secrets/sealed-secrets.yaml;
 
-      touch infrastructure/sealed-secrets/kustomization.yaml
-
 * Push to git so Flux can act on it
 
       git add infrastructure/sources/sealed-secrets-source.yaml \
-        infrastructure/sealed-secrets/sealed-secrets.yaml \
-        infrastructure/sealed-secrets/kustomization.yaml;
+        infrastructure/sealed-secrets/sealed-secrets.yaml;
       git commit -m "Added Sealed Secrets";
       git push
 
-* Install CLI
+* Next we need to add simple _Kustomization_ files that activates Sealed Secrets for our cluster.
+These will be very simple for now, later on they will be more elaborate and helpful
+
+
+* Edit   `infrastructure/sealed-secrets/kustomization.yaml`
+
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      resources:
+      - sealed-secrets.yaml
+
+* Edit   `infrastructure/sources/kustomization.yaml`
+
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      resources:
+      - sealed-secrets-source.yaml
+
+* Edit   `infrastructure/kustomization.yaml`
+
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      resources:
+      - sources
+      - sealed-secrets
+
+
+
+* Create a pollable link in our cluster:
+
+      flux create kustomization sealed-secrets \
+        --target-namespace=flux-system \
+        --source=flux-system \
+        --path="./infrastructure" \
+        --prune=true \
+        --interval=10m \
+        --export > clusters/flurdynet-kickoff2-01/infrastructure.yaml
+
+
+* Push to git
+
+      git add infrastructure/sealed-secrets/kustomization.yaml \
+        infrastructure/kustomization.yaml \
+        clusters/flurdynet-kickoff2-01/infrastructure.yaml;
+      git commit -m "Activated Sealed Secrets";
+      git push
+
+* Flux should pick this up and install the Helm chart for Sealed Secrets
+
+#### Using Sealed Secrets
+
+* Install `kubeseal` CLI
 
       brew install kubeseal
 
-* Retrieve public key
+* Retrieve public key from this cluster
 
-      mkdir /clusters/my-doubledragon-01/secrets;
+      mkdir /clusters/doubledragon-01/secrets;
 
       kubeseal --fetch-cert \
         --controller-name=sealed-secrets-controller \
         --controller-namespace=flux-system \
-        > /clusters/my-doubledragon-01/secrets/pub-sealed-secrets.pem
+        > clusters/doubledragon-01/secrets/pub-sealed-secrets.pem
 
   * Some cluster setups may block access to your sealed-secrets-controller,
 e.g. a GKE cluster.
@@ -213,11 +261,13 @@ e.g. a GKE cluster.
   * And use `curl` to download the certificate instead:
 
         curl localhost:8081/v1/cert.pem \
-          > /clusters/my-doubledragon-01/secrets/pub-sealed-secrets.pem
+          > clusters/doubledragon-01/secrets/pub-sealed-secrets.pem
 
 * Add it to source control
 
-      git add clusters/my-doubledragon-01/secrets/pub-sealed-secrets.pem
+      git add clusters/doubledragon-01/secrets/pub-sealed-secrets.pem
+      git commit -m "Sealed Secret public key"
+      git push
 
 ### Nginx Ingress
 
