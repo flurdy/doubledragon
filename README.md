@@ -29,38 +29,61 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
 ### Kubernetes tools and cluster
 
 *     brew install kubectl
-* Create Kubernetes cluster (see Kubernetes as a Service providers below)
+* Create Kubernetes cluster (see *Kubernetes as a Service providers* below)
 * Set up Kubernetes context (see provider CLIs and `kubectx` below)
 * Test cluster connection:
 
       kubectl cluster-info
 
+
+
+### Github token
+
+Flux uses your [Github Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) to access your repos.
+If you need to create a new one you need to make sure it has the required accesses ticked. For example Flux will need to access to the deploy key for the repo which require *Admin* access.
+
+In your dotfiles make sure you expose it as `GITHUB_TOKEN`.
+At the same time set the `GITHUB_USER` env-var to your github username.
+(Nudge: [direnv](https://direnv.net/))
+
+### Github CLI
+
+This is optional. Instead you can do this manually via the github website. But the examples for clarity uses the [CLI](https://cli.github.com/).
+
+
+      brew install gh;
+      gh auth login
+
+Note, the CLI for some reason does not like if Github PAT env-var is set so you may have to temporarily unset when using it.
+
+     # In Bash:
+     unset GITHUB_TOKEN
+     # In Fish:
+     set -e GITHUB_TOKEN
+
+Make sure you set the `GITHUB_TOKEN` env-var again afterwards.
 ## Double Dragon install
 
 ### Fork/Clone repository
 
-* Keep a local copy of Double Dragon.
-  E.g. with [Github CLI](https://cli.github.com):
+* Initialize an empty Double Dragon repo for your setup.
 
-      brew install gh;
-      gh auth login;
-      gh repo clone flurdy/doubledragon;
-
-* Initialize an empty repo for your setup.
-
-      mkdir doubledragon-fleet;
+      git clone git@github.com:flurdy/doubledragon.git \
+         doubledragon-fleet;
       cd doubledragon-fleet;
-      cp ../doubledragon/README.md
-      cp ../doubledragon/LICENSE .
+      rm -rf .git;
       git init;
       git add README.md LICENSE;
-      git commit -m "Starting our double dragon fleet"
-      gh repo create --private doubledragon-fleet;
+      git commit -m "Starting our double dragon fleet";
+
+* And push it to github as a private repo
+
+      gh repo create --private doubledragon-fleet -r origin;
       git push -u origin main
 
 * Replace _doubledragon-fleet_ with whatever you want to call your repository
 
-* Flux can also talk to Bitbucket, Gitlab, Github Enterprise and self-hosted git repositories
+Note, Flux can also talk to Bitbucket, Gitlab, Github Enterprise and self-hosted git repositories
 
 ### Install Flux CLI
 
@@ -71,59 +94,62 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
 
       flux check --pre
 
-
-### Install Flux on your cluster
+### Bootstrap Flux on your cluster
 
 *
       flux bootstrap github \
-        --components-extra=image-reflector-controller,image-automation-controller \
         --owner=$GITHUB_USER \
         --repository=doubledragon-fleet \
         --branch=main \
-        --path=./clusters/my-doubledragon-01 \
+        --path=./clusters/doubledragon-01 \
         --personal
 
 * This assumes the repo is called _doubledragon-fleet_ (it will create it if it does not exist).
-   And names your initial cluster as _my-doubledragon-01_.
+   And names your initial cluster as _doubledragon-01_.
    Change as appropriate
 
-*
+* Note previously I also included:
+
+      --components-extra=image-reflector-controller,image-automation-controller \
+   but that is under review if still needed for image scanning
+
+* Update your local repo with the _origin_ changes
+
       git pull
 
 ### File structure
 
-Unlike Flux v1 which was a simpler one repo per cluster,
-Flux v2 is more flexible with potentially many clusters per repo
+Unlike Flux v1 which was a simpler one repo per cluster.
+Flux v2 is more flexible with potentially many clusters per repo and more.
 
 Flux v2 also prefer to use [Kustomize](https://kustomize.io),
 but you do not have to use it.
 
 Flux can act directly in your cluster,
 but this setup does everything via config files and git.
+That way we have a replayable paper trail.
 
 So a Flux repo may look like this at the start:
 
     |-- apps
     |   |-- base
     |   |-- overlays
-    |   |   |-- my-doubledragon
+    |   |   |-- doubledragon
     |-- clusters
-    |   |-- my-doubledragon-01
+    |   |-- doubledragon-01
     |-- infrastructure
     |   |-- sources
 
 
 * `apps/base` is where you define your apps; deployments, services, etc.
 * `apps/overlays/clustername` is where you choose which apps a cluster has.
-* `cluster/clustername` with links to apps and infrastructure active in your cluster.
+* `cluster/clustername` with links to apps and infrastructure active in your specific cluster.
 * `infrastructure/sources` where to find images from registries, Helm repos, etc.
 
 * Create some of these folders:
 
       mkdir -p apps/base;
-
-      mkdir -p apps/overlays/my-doubledragon;
-
+      mkdir -p apps/overlays/doubledragon;
       mkdir -p infrastructure/sources
 
 * Check the file structure
