@@ -158,6 +158,8 @@ So a Flux repo may look like this at the start:
 
 ### Sealed Secrets
 
+Safely store encrypted secrets in the git repository
+
 * Add a Helm repository for Sealed Secrets
 
       flux create source helm sealed-secrets-source \
@@ -167,7 +169,7 @@ So a Flux repo may look like this at the start:
 
 * Install Helm chart
 
-      mkdir infrastructure/sealed-secrets;
+      mkdir -p infrastructure/sealed-secrets;
 
       flux create helmrelease sealed-secrets \
         --interval=1h \
@@ -212,8 +214,6 @@ These will be very simple for now, later on they will be more elaborate and help
       - sources
       - sealed-secrets
 
-
-
 * Create a pollable link in our cluster:
 
       flux create kustomization sealed-secrets \
@@ -243,7 +243,7 @@ These will be very simple for now, later on they will be more elaborate and help
 
 * Retrieve public key from this cluster
 
-      mkdir /clusters/doubledragon-01/secrets;
+      mkdir -p /clusters/doubledragon-01/secrets;
 
       kubeseal --fetch-cert \
         --controller-name=sealed-secrets-controller \
@@ -273,10 +273,18 @@ e.g. a GKE cluster.
 
 * Add a Helm repository
 
-      flux create source helm sealed-secrets \
+      flux create source helm ingress-nginx-source \
         --interval=1h \
         --url=https://kubernetes.github.io/ingress-nginx \
         --export > infrastructure/sources/ingress-nginx-source.yaml
+
+* Append it to the exiting sources kustomization `infrastructure/sources/kustomization.yaml`
+
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      resources:
+      - sealed-secrets-source.yaml
+      - ingress-nginx-source.yaml
 
 * Install Helm chart
 
@@ -292,7 +300,32 @@ e.g. a GKE cluster.
         --crds=CreateReplace \
         --export > infrastructure/ingress-nginx/ingress-nginx.yaml;
 
+* Add kustomization `infrastructure/ingress-nginx/kustomization.yaml`
 
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      resources:
+      - ingress-nginx.yaml
+
+
+* Append it to `infrastructure/kustomization.yaml`
+
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      resources:
+      - sources
+      - sealed-secrets
+      - ingress-nginx
+
+* Add to git and push
+
+      git add infrastructure/sources/ingress-nginx-source.yaml;
+      git add infrastructure/sources/kustomization.yaml;
+      git add infrastructure/ingress-nginx/ingress-nginx.yaml;
+      git add infrastructure/ingress-nginx/kustomization.yaml;
+      git add infrastructure/kustomization.yaml;
+      git commit -m "Nginx Ingress";
+      git push
 
 ### Cert Manager
 
