@@ -345,10 +345,16 @@ And some secrets to access those.
 * For example if you needed _GCR_.
   And have followed the guide above and got a `gcr-registry.yml` file.
 
+* Make sure the raw secrets do not get added to git
+
+      echo gcp-service-account.json >> .gitignore;
+      echo gcr-registry.yml >> .gitignore;
+      git add .gitignore
+
 * Seal the secrets
 
       mkdir -p clusters/doubledragon-01/registries/default;
-      kubeseal --format=yaml --namespace=default\
+      kubeseal --format=yaml --namespace=default \
       --cert=clusters/doubledragon-01/secrets/sealed-secrets-cert.pem \
       < gcr-registry.yml \
       > clusters/doubledragon-01/registries/default/sealed-gcr-registry.yml;
@@ -357,9 +363,9 @@ And some secrets to access those.
       kubeseal --format=yaml --namespace=flux-system\
       --cert=clusters/doubledragon-01/secrets/sealed-secrets-cert.pem \
       < gcr-registry.yml \
-      > clusters/doubledragon-01/registries/flux-system/sealed-gcr-registry.yml;
+      > clusters/doubledragon-01/registries/flux-system/sealed-gcr-registry.yml
 
-* Add it to Flux
+* Add the secrets to Flux
 
       git add clusters/doubledragon-01/registries/default/sealed-gcr-registry.yml;
       git add clusters/doubledragon-01/registries/flux-system/sealed-gcr-registry.yml;
@@ -367,6 +373,9 @@ And some secrets to access those.
       git push
 
    You may need more for other future namespaces.
+
+#
+
 
 __Your GitOps based Kubernetes cluster is live!__
 
