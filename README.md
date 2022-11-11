@@ -330,6 +330,7 @@ e.g. a GKE cluster.
 ### Cert Manager
 
 * Coming soon...
+
 ### Container Registries
 
 To access private Docker container image repositories
@@ -337,13 +338,35 @@ we need to setup some more sources, image sources.
 And some secrets to access those.
 
 
-* [flurdy's 'kubernetes-docker-registry.html](https://flurdy.com/docs/kubernetes/registry/kubernetes-docker-registry.html)
+* Please follow [flurdy's 'kubernetes-docker-registry guide](https://flurdy.com/docs/kubernetes/registry/kubernetes-docker-registry.html) for your relevant registry.
 
+#### GCR Google Container Registry
 
+* For example if you needed _GCR_.
+  And have followed the guide above and got a `gcr-registry.yml` file.
 
-* Create
+* Seal the secrets
 
+      mkdir -p clusters/doubledragon-01/registries/default;
+      kubeseal --format=yaml --namespace=default\
+      --cert=clusters/doubledragon-01/secrets/sealed-secrets-cert.pem \
+      < gcr-registry.yml \
+      > clusters/doubledragon-01/registries/default/sealed-gcr-registry.yml;
 
+      mkdir -p clusters/doubledragon-01/registries/flux-system;
+      kubeseal --format=yaml --namespace=flux-system\
+      --cert=clusters/doubledragon-01/secrets/sealed-secrets-cert.pem \
+      < gcr-registry.yml \
+      > clusters/doubledragon-01/registries/flux-system/sealed-gcr-registry.yml;
+
+* Add it to Flux
+
+      git add clusters/doubledragon-01/registries/default/sealed-gcr-registry.yml;
+      git add clusters/doubledragon-01/registries/flux-system/sealed-gcr-registry.yml;
+      git commit -m "GCR registry";
+      git push
+
+   You may need more for other future namespaces.
 
 __Your GitOps based Kubernetes cluster is live!__
 
