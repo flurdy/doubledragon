@@ -68,8 +68,7 @@ Make sure you set the `GITHUB_TOKEN` env-var again afterwards.
 
 * Initialize an empty Double Dragon repo for your setup.
 
-      git clone git@github.com:flurdy/doubledragon.git \
-         doubledragon-fleet;
+      git clone git@github.com:flurdy/doubledragon.git doubledragon-fleet;
       cd doubledragon-fleet;
       rm -rf .git;
       git init;
@@ -111,7 +110,7 @@ Note, Flux can also talk to Bitbucket, Gitlab, Github Enterprise and self-hosted
 * Note previously I also included:
 
       --components-extra=image-reflector-controller,image-automation-controller \
-   but that is under review if still needed for image scanning
+   but that is under review if still needed for polling image updates
 
 * Update your local repo with the _origin_ changes
 
@@ -216,7 +215,7 @@ These will be very simple for now, later on they will be more elaborate and help
 
 * Create a pollable link in our cluster:
 
-      flux create kustomization sealed-secrets \
+      flux create kustomization infrastructure \
         --target-namespace=flux-system \
         --source=flux-system \
         --path="./infrastructure" \
@@ -293,12 +292,13 @@ e.g. a GKE cluster.
       flux create helmrelease ingress-nginx \
         --interval=1h \
         --release-name=ingress-nginx \
-        --target-namespace=flux-system \
+        --target-namespace=default \
+        --namespace=default \
         --source=HelmRepository/ingress-nginx-source \
         --chart=ingress-nginx \
         --chart-version=">=1.0-4" \
         --crds=CreateReplace \
-        --export > infrastructure/ingress-nginx/ingress-nginx.yaml;
+        --export > infrastructure/ingress-nginx/ingress-nginx.yaml
 
 * Add kustomization `infrastructure/ingress-nginx/kustomization.yaml`
 
@@ -374,32 +374,155 @@ And some secrets to access those.
 
    You may need more for other future namespaces.
 
+Note, you also need a furter step to scan for image updates in each GCR repo. We will show how to add `ImageRepository` in a bit.
+
 #
-
-
-__Your GitOps based Kubernetes cluster is live!__
-
-If you waited a few minutes then your GitOps configured Kubernetes cluster is now live.
-
-But with no apps running.
-
 ## Your first application
 
-### Launch application
+Lets create a Hello World app.
 
+* First lets create a _base layer_
+
+      mkdir -p apps/base/hello;
+
+* And an intial deployment yaml for an _Hello_ app
+
+      kubectl create deployment hello-deployment \
+      --image=nginxdemos/hello:0.3 \
+      --dry-run=client -o yaml \
+      > apps/base/hello/deployment.yaml
+
+* Lets prune the output a bit: `apps/base/hello/deployment.yaml`,
+and change the app labels to just `hello`
+
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        labels:
+          app: hello
+        name: hello-deployment
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: hello
+        template:
+          metadata:
+            labels:
+              app: hello
+          spec:
+            containers:
+              - image: nginxdemos/hello:0.3
+                name: hello
+
+* And a service at `apps/base/hello/service.yaml`
+
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: hello-service
+        namespace: default
+      spec:
+        selector:
+          app: hello
+        ports:
+          - protocol: TCP
+            port: 80
+            targetPort: 80
+
+* And an ingress at `apps/base/hello/ingress.yaml`
+
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: hello-ingress
+        namespace: default
+        annotations:
+          kubernetes.io/ingress.class: nginx
+      spec:
+        rules:
+          - host: hello.example.com
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: hello-service
+                      port:
+                        number: 80
+
+* Bundle these in `apps/base/hello/kustomization.yaml`
+
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      namespace: default
+      resources:
+        - deployment.yaml
+        - service.yaml
+        - ingress.yaml
+
+### Hello app overlay
+
+     mkdir -p apps/overlays/doubledragon/hello;
+
+  Edit `apps/overlays/doubledragon/hello/kustomization.yaml`
+
+  In more complicated apps this may have some overrides but for now very simple.
+
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      namespace: default
+      bases:
+        - ../../../base/hello
+
+
+  Edit `apps/overlays/doubledragon/kustomization.yaml`
+
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      namespace: default
+      bases:
+        - hello
+
+* Add to the repo
+
+      git add apps/base/hello/deployment.yaml;
+      git add apps/base/hello/service.yaml;
+      git add apps/base/hello/ingress.yaml;
+      git add apps/base/hello/kustomization.yaml;
+      git add apps/overlays/doubledragon/hello/kustomization.yaml;
+      git add apps/overlays/doubledragon/kustomization.yaml;
+      git commit -m "Hello app files"
+      git push
+
+### Add Hello app to cluster
+
+* Create a _kustomization_ for all apps in the overlay
+
+      flux create kustomization apps \
+        --target-namespace=default \
+        --source=flux-system \
+        --path="./apps/overlays/doubledragon" \
+        --depends-on=./infrastructure.yaml \
+        --prune=true \
+        --interval=10m \
+        --export > clusters/doubledragon-01/apps.yaml
 ### Test application
 
 * Find the ingress controller's `External IP`
 
-      kubectl get services nginx-ingress-controller
+      kubectl get services ingress-nginx-controller
 
-* Use `curl` to resolve the URL. Replace `11.22.33.44` with the external IP.
-* And `lynx` to view it
+* Use `curl` to resolve the URL. Replace `11.22.33.44` with the external IP,
+  and `lynx` to view it
 
       curl -H "Host: hello.example.com" \
         --resolve hello.example.com:80:11.22.33.44 \
         --resolve hello.example.com:443:11.22.33.44 \
         http://hello.example.com | lynx -stdin
+
 * This should show a basic hello world page, with an Nginx logo and some server address, name and date details.
 
 
