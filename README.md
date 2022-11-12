@@ -48,7 +48,7 @@ At the same time set the `GITHUB_USER` env-var to your github username.
 
 ### Github CLI
 
-This is optional. Instead you can do this manually via the github website. But the examples for clarity uses the [CLI](https://cli.github.com/).
+This is optional. Instead you can do this manually via the github website. The [CLI](https://cli.github.com/) command is only used for creating the private repo.
 
 
       brew install gh;
@@ -118,10 +118,10 @@ Note, Flux can also talk to Bitbucket, Gitlab, Github Enterprise and self-hosted
 
 ### File structure
 
-Unlike Flux v1 which was a simpler one repo per cluster.
+Unlike Flux v1 which was a simpler one repo per cluster,
 Flux v2 is more flexible with potentially many clusters per repo and more.
 
-Flux v2 also prefer to use [Kustomize](https://kustomize.io),
+Flux v2 also prefer to use [Kustomize](https://kustomize.io) for templating,
 but you do not have to use it.
 
 Flux can act directly in your cluster,
@@ -338,7 +338,7 @@ we need to setup some more sources, image sources.
 And some secrets to access those.
 
 
-* Please follow [flurdy's 'kubernetes-docker-registry guide](https://flurdy.com/docs/kubernetes/registry/kubernetes-docker-registry.html) for your relevant registry.
+* Please follow [flurdy's 'kubernetes-docker-registry guide](https://flurdy.com/docs/kubernetes/registry/kubernetes-docker-registry.html) for your relevant registries.
 
 #### GCR Google Container Registry
 
@@ -372,7 +372,7 @@ And some secrets to access those.
       git commit -m "GCR registry";
       git push
 
-   You may need more for other future namespaces.
+   You may need more for future namespaces.
 
 Note, you also need a furter step to scan for image updates in each GCR repo. We will show how to add `ImageRepository` in a bit.
 
@@ -528,16 +528,80 @@ and change the app labels to just `hello`
 
 ### Update application
 
+* Updating the Docker image in the Docker registry should trigger a rollout to the cluster.
+
+* If you have set up the _source_ to poll that registry repo.
+
 ### Delete application
+
+* Remove / comment out the app in `clusters/doubledragon-01/apps.yaml`
+
+  That should cascade the changes via the aggregated _kustomize_, and remove the ingress, service and deployment from the live cluster.
+
+* If permanent remove the app's `apps/overlays` and `apps/base` folders as well.
 
 ## Go wild
 
-* Add/update your deployments, services, charts, docker registries, secrets, etc
+* Add/update your deployments, services, charts, docker registries, secrets, kustomizations etc
 ## Advise: Don't touch
 
 * Once Flux is running, by convention avoid using `kubectl create|apply` etc.
-* Nearly all changes should be via Git and Flux.
-* Any `kubectl` interaction should be read only.
+* And by the same convention avoid using `flux create`.
+
+  i.e avoid acting directly for any _write_ operations.
+
+  Nearly all changes should be via Git. Export any changed YAML to Git as above.
+
+  Otherwise the git source and cluster state will start to diverge and hard to recreate.
+
+* Any `kubectl` and  `flux` interaction should be read only. Those are fine.
+
+* Sometimes willst troubleshooting you will have to use the scalpel and use `kubectl create|apply|delete` or `flux create`.
+
+   But minimise the usage, and try to update the yaml to reflect any permanent changes.
+
+## Do it all again - new cluster
+
+* Now that you have a working cluster, scrap it. If you want to.
+
+* You should be able to create a new one quite quickly with the source files in the repo already. Without all the mistakes from setting up the first cluster.
+
+* Or when you just need another cluster naturally, you can do the same.
+
+* Create the cluster with your provider
+* Authenticate `kubectl` with the new cluster
+* Set as the current kubernetes context
+
+* Add another cluster folder e.g. `clusters/doubledragon-02`
+
+      mkdir -p clusters/doubledragon-02;
+      cp -r clusters/doubledragon-01/* clusters/doubledragon-02/;
+
+* Remove the public key and any sealed secrets as they need re-encrypting
+
+      rm clusters/doubledragon-02/secrets/pub-sealed-secrets.pem;
+      rm clusters/doubledragon-02/registries/default/*;
+      rm clusters/doubledragon-02/registries/flux-system/*;
+      git add clusters/doubledragon-02;
+      git commit -m "Double Dragon II";
+      git push
+
+* Bootstrap the new cluster with `doubledragon-02` as name
+
+      flux bootstrap github \
+        --owner=$GITHUB_USER \
+        --repository=doubledragon-fleet \
+        --branch=main \
+        --path=./clusters/doubledragon-02 \
+        --personal
+
+* Download the _Sealed Secrets_ public key for this cluster
+
+* Re-encrypt secrets such as the GCR registry secret
+
+* The exposed load balancer external IP will be different.
+
+* And that will be it
 
 ## More information, alternatives, suggestions
 
@@ -582,13 +646,12 @@ and change the app labels to just `hello`
 
 ### Notes:
 
-* Certain operation takes a few minutes, e.g. pod creation.
+* Certain operation takes a few minutes, e.g. pod creation, waiting on Flux scan polling.
 * Client tools are also available on Linux, Windows and more.
-
-
 
 ## Versions
 
+* 2022-11-10 Double Dragon refreshed
 * 2021-07-10 Flux 2. Lemmings => Double Dragon
 * 2020-02-13 Flux 1.1, fluxcd.io annotations, and Helm 3
 * 2019-11-07 Flux 0.16, flux.weave.works annotations and Helm 2
