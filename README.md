@@ -113,6 +113,7 @@ Note, Flux can also talk to Bitbucket, Gitlab, Github Enterprise and self-hosted
 
 *
       flux bootstrap github \
+        --components-extra=image-reflector-controller,image-automation-controller \
         --owner=$GITHUB_USER \
         --repository=doubledragon-fleet \
         --branch=main \
@@ -123,10 +124,9 @@ Note, Flux can also talk to Bitbucket, Gitlab, Github Enterprise and self-hosted
    And names your initial cluster as _doubledragon-01_.
    Change as appropriate
 
-* Note previously I also included:
-
+<!-- * Note previously I also included:
       --components-extra=image-reflector-controller,image-automation-controller \
-   but that is under review if still needed for polling image updates
+   but that is under review if still needed for polling image updates -->
 
 * Update your local repo with the _origin_ changes
 
