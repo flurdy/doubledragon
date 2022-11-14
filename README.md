@@ -14,17 +14,33 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
 
 ![Double Dragon](https://static.wixstatic.com/media/cf1e64_4736286d1baa49ee99802212ada59dee~mv2.png/v1/fill/w_498,h_664,al_c,usm_0.66_1.00_0.01/cf1e64_4736286d1baa49ee99802212ada59dee~mv2.png "arcade!")
 
-## Contributors
+### Contributors
 
 * Ivar Abrahamsen : [@flurdy](https://twitter.com/flurdy) : [github.com/flurdy](https://github.com/flurdy) : [eray.uk](https://eray.uk)
 
 
-## Flux version
+### Flux version
 
 * For a Flux v1 setup, please follow the older [Lemmings repository](https://github.com/flurdy/lemmings/)
 * For a Flux v2 setup, please follow this, the [Double Dragon repository](https://github.com/flurdy/doubledragon/)
 
-## Pre requisite
+### Contents
+
+1. [Introduction](#doubledragon)
+1. [Pre requisites](#contributors)
+1. [Double Dragon install](#double-dragon-install)
+   1. [Clone repository](#forkclone-repository)
+   1. [Install Flux CLI](#install-flux-cli)
+   1. [Bootstrap Flux](#bootstrap-flux-on-your-cluster)
+   1. [File structure](#file-structure)
+   1. [Sealed Secrets](#sealed-secrets)
+   1. [Nginx Ingress](#nginx-ingress)
+   <!-- 1. [Cert Manager](#cert-manager) -->
+   1. [Container registries](#container-registries)
+1. [Your first application](#your-first-application)
+1. [More information](#more-information-alternatives-suggestions)
+
+## Pre requisites
 
 ### Kubernetes tools and cluster
 
@@ -374,9 +390,45 @@ And some secrets to access those.
 
    You may need more for future namespaces.
 
-Note, you also need a furter step to scan for image updates in each GCR repo. We will show how to add `ImageRepository` in a bit.
+* Lets set up repo image scanning
 
-#
+  To check when a new repo tag and image has been added to a registry.
+
+  For example if you have an app that stores its images in a private repo like _GCR.
+  Otherwise you can wait to do this step later.
+
+      flux create image repository someapp-source \
+      --image=ghcr.io/someorg/someuser/somerepo \
+      --interval=5m \
+      --namespace=default \
+      --secret-ref=gcr-registry \
+      --export > infrastructure/sources/someapp-source.yaml
+
+  * (Change _somerepo_ to your app name.
+  And use the correct GCR image path.)
+
+  * This example refers to the `gcr-registry` sealed secret
+
+  If you need it to access other namespaces you can append something like this to the YAML
+
+
+      accessFrom:
+        namespaceSelectors:
+          - matchLabels:
+              kubernetes.io/metadata.name: flux-system,somenamespace
+
+  * You can also be specific about the version policy.
+
+    You can configure it to only scan for [semver](https://semver.org) versions.
+    Or build number. Or other.
+
+    For example, a _semver_ policy:
+
+        flux create image policy someapp-policy \
+        --image-ref=someapp-source \
+        --select-semver=5.0.x \
+        --export > ./infrastructure/sources/someapp-policy.yaml
+
 ## Your first application
 
 Lets create a Hello World app.
@@ -529,8 +581,8 @@ and change the app labels to just `hello`
 ### Update application
 
 * Updating the Docker image in the Docker registry should trigger a rollout to the cluster.
-
-* If you have set up the _source_ to poll that registry repo.
+   * If you have set up the _source_ to poll that registry repo.
+* Update any settings in the e.g. `deployment.yaml`, commit and push, Flux will pick it up and roll out the changes.
 
 ### Delete application
 
@@ -538,7 +590,7 @@ and change the app labels to just `hello`
 
   That should cascade the changes via the aggregated _kustomize_, and remove the ingress, service and deployment from the live cluster.
 
-* If permanent remove the app's `apps/overlays` and `apps/base` folders as well.
+* If permanent, remove the app's `apps/overlays` and `apps/base` folders as well as a tidy-up chore.
 
 ## Go wild
 
