@@ -35,9 +35,10 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
    1. [File structure](#file-structure)
    1. [Sealed Secrets](#sealed-secrets)
    1. [Nginx Ingress](#nginx-ingress)
-   <!-- 1. [Cert Manager](#cert-manager) -->
    1. [Container registries](#container-registries)
+   <!-- 1. [Cert Manager](#cert-manager) -->
 1. [Your first application](#your-first-application)
+1. [Add a new cluster](#add-a-new-cluster)
 1. [More information](#more-information-alternatives-suggestions)
 
 ## Pre requisites
@@ -258,12 +259,12 @@ These will be very simple for now, later on they will be more elaborate and help
 
 * Retrieve public key from this cluster
 
-      mkdir -p /clusters/doubledragon-01/secrets;
+      mkdir -p clusters/doubledragon-01/secrets;
 
       kubeseal --fetch-cert \
         --controller-name=sealed-secrets-controller \
         --controller-namespace=flux-system \
-        > clusters/doubledragon-01/secrets/pub-sealed-secrets.pem
+        > clusters/doubledragon-01/secrets/sealed-secrets-cert.pem
 
   * Some cluster setups may block access to your sealed-secrets-controller,
 e.g. a GKE cluster.
@@ -276,11 +277,11 @@ e.g. a GKE cluster.
   * And use `curl` to download the certificate instead:
 
         curl localhost:8081/v1/cert.pem \
-          > clusters/doubledragon-01/secrets/pub-sealed-secrets.pem
+          > clusters/doubledragon-01/secrets/sealed-secrets-cert.pem
 
 * Add it to source control
 
-      git add clusters/doubledragon-01/secrets/pub-sealed-secrets.pem
+      git add clusters/doubledragon-01/secrets/sealed-secrets-cert.pem
       git commit -m "Sealed Secret public key"
       git push
 
@@ -429,6 +430,9 @@ And some secrets to access those.
         --select-semver=5.0.x \
         --export > ./infrastructure/sources/someapp-policy.yaml
 
+* Note, for _GCR_ there is the alternative option of a more secure short-lived _acccess token_ instead.
+
+  This can be done with Flux. [You need to set up a cronjob to refresh it](https://fluxcd.io/flux/guides/cron-job-image-auth/).
 ## Your first application
 
 Lets create a Hello World app.
@@ -437,7 +441,7 @@ Lets create a Hello World app.
 
       mkdir -p apps/base/hello;
 
-* And an intial deployment yaml for an _Hello_ app
+* And an initial deployment yaml for an _Hello_ app
 
       kubectl create deployment hello-deployment \
       --image=nginxdemos/hello:0.3 \
@@ -612,33 +616,27 @@ and change the app labels to just `hello`
 
    But minimise the usage, and try to update the yaml to reflect any permanent changes.
 
-## Do it all again - new cluster
+## Add a new cluster
+
+ * You do not have to do it all again
 
 * Now that you have a working cluster, scrap it. If you want to.
 
-* You should be able to create a new one quite quickly with the source files in the repo already. Without all the mistakes from setting up the first cluster.
+  Create a new cluster without all the mistakes from setting up the first cluster.
 
 * Or when you just need another cluster naturally, you can do the same.
 
 * Create the cluster with your provider
+
 * Authenticate `kubectl` with the new cluster
+
 * Set as the current kubernetes context
 
 * Add another cluster folder e.g. `clusters/doubledragon-02`
 
       mkdir -p clusters/doubledragon-02;
-      cp -r clusters/doubledragon-01/* clusters/doubledragon-02/;
 
-* Remove the public key and any sealed secrets as they need re-encrypting
-
-      rm clusters/doubledragon-02/secrets/pub-sealed-secrets.pem;
-      rm clusters/doubledragon-02/registries/default/*;
-      rm clusters/doubledragon-02/registries/flux-system/*;
-      git add clusters/doubledragon-02;
-      git commit -m "Double Dragon II";
-      git push
-
-* Bootstrap the new cluster with `doubledragon-02` as name
+* Bootstrap the new cluster with `doubledragon-02` as the name
 
       flux bootstrap github \
         --owner=$GITHUB_USER \
@@ -647,13 +645,55 @@ and change the app labels to just `hello`
         --path=./clusters/doubledragon-02 \
         --personal
 
+* Copy the `infrastructure.yaml` kustomization to the new cluster
+
+      cp clusters/doubledragon-01/infrastructure.yaml clusters/doubledragon-02/;
+      git add clusters/doubledragon-02/infrastructure.yaml;
+      git commit -m "Double Dragon II infrastructure";
+      git push
+
+  This will add the _Sealed Secrets_, _Nginx_, and everything in _sources_ to the new cluster.
+  And more if you have extended it.
+
+  The _sources_ may cause issues initially until we re-encrypt any secrets.
+
 * Download the _Sealed Secrets_ public key for this cluster
 
-* Re-encrypt secrets such as the GCR registry secret
+      mkdir -p /clusters/doubledragon-02/secrets;
 
-* The exposed load balancer external IP will be different.
+      kubeseal --fetch-cert \
+      --controller-name=sealed-secrets-controller \
+      --controller-namespace=flux-system \
+      > clusters/doubledragon-02/secrets/sealed-secrets-cert.pem
+
+* Re-encrypt secrets such as the GCR registry secret if needed
+
+  E.g.
+
+      mkdir -p clusters/doubledragon-02/registries/default;
+
+      kubeseal --format=yaml --namespace=default \
+       --cert=clusters/doubledragon-02/secrets/sealed-secrets-cert.pem \
+       < gcr-registry.yml \
+       > clusters/doubledragon-02/registries/default/sealed-gcr-registry.yml;
+
+      git add clusters/doubledragon-02/registries/default/sealed-gcr-registry.yml;
+      git commit -m "GCR registry for cluster DD-02 ns default";
+      git push
+
+* Optionally create a new overlay
+
+  Or share the same common one in `apps/overlays/doubledragon`
+  linked in `apps.yaml`
+
+      cp clusters/doubledragon-01/apps.yaml clusters/doubledragon-02/;
+      git add clusters/doubledragon-02/apps.yaml;
+      git commit -m "Apps overlay for cluster DD-02";
+      git push
 
 * And that will be it
+
+* Note, the exposed load balancer external IP will be different.
 
 ## More information, alternatives, suggestions
 
