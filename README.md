@@ -38,7 +38,7 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
    1. [Container registries](#container-registries)
    <!-- 1. [Cert Manager](#cert-manager) -->
 1. [Your first application](#your-first-application)
-1. [Add a new cluster](#add-a-new-cluster)
+1. [Add anothercluster](#add-another-cluster)
 1. [More information](#more-information-alternatives-suggestions)
 
 ## Pre requisites
@@ -612,19 +612,21 @@ and change the app labels to just `hello`
 
 * Any `kubectl` and  `flux` interaction should be read only. Those are fine.
 
-* Sometimes willst troubleshooting you will have to use the scalpel and use `kubectl create|apply|delete` or `flux create`.
+* Sometimes whilst troubleshooting you will have to use the scalpel and use `kubectl create|apply|delete` or `flux create`.
 
    But minimise the usage, and try to update the yaml to reflect any permanent changes.
 
-## Add a new cluster
-
- * You do not have to do it all again
+## Add another cluster
 
 * Now that you have a working cluster, scrap it. If you want to.
 
   Create a new cluster without all the mistakes from setting up the first cluster.
 
 * Or when you just need another cluster naturally, you can do the same.
+
+* In only a few steps, you do not have to do it all again
+
+### Create and bootstrap another cluster
 
 * Create the cluster with your provider
 
@@ -644,6 +646,8 @@ and change the app labels to just `hello`
         --branch=main \
         --path=./clusters/doubledragon-02 \
         --personal
+
+### Copy and re-initialise infrastructure
 
 * Copy the `infrastructure.yaml` kustomization to the new cluster
 
@@ -680,6 +684,8 @@ and change the app labels to just `hello`
       git add clusters/doubledragon-02/registries/default/sealed-gcr-registry.yml;
       git commit -m "GCR registry for cluster DD-02 ns default";
       git push
+
+### Copy/tweak apps overlay
 
 * Optionally create a new overlay
 
