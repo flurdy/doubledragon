@@ -172,6 +172,34 @@ So a Flux repo may look like this at the start:
 
       tree
 
+
+### Namespaces
+
+* Lets separate some of our resources into two namespaces.
+
+  You may go with further specific namespaces if you prefer.
+
+  (For some reason _kustomize_ does not let you add several namespaces
+  in one _kustomization_ so we will add plain files to the cluster)
+
+* Edit `clusters/doubledragon-01/namespaces.yaml`
+
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: infrastructure
+      ---
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: apps
+
+* Push to _Flux_
+
+      git add clusters/doubledragon-01/namespaces.yaml;
+      git commit -m "Namespaces";
+      git push
+
 ### Sealed Secrets
 
 Safely store encrypted secrets in the git repository
@@ -180,6 +208,7 @@ Safely store encrypted secrets in the git repository
 
       flux create source helm sealed-secrets-source \
         --interval=1h \
+        -- namespace=infrastructure \
         --url=https://bitnami-labs.github.io/sealed-secrets \
         --export > infrastructure/sources/sealed-secrets-source.yaml
 
@@ -190,7 +219,7 @@ Safely store encrypted secrets in the git repository
       flux create helmrelease sealed-secrets \
         --interval=1h \
         --release-name=sealed-secrets-controller \
-        --target-namespace=flux-system \
+        --target-namespace=infrastructure \
         --source=HelmRepository/sealed-secrets-source \
         --chart=sealed-secrets \
         --chart-version=">=1.15.0-0" \
@@ -201,8 +230,7 @@ Safely store encrypted secrets in the git repository
 
       git add infrastructure/sources/sealed-secrets-source.yaml \
         infrastructure/sealed-secrets/sealed-secrets.yaml;
-      git commit -m "Added Sealed Secrets";
-      git push
+      git commit -m "Added Sealed Secrets"
 
 * Next we need to add simple _Kustomization_ files that activates Sealed Secrets for our cluster.
 These will be very simple for now, later on they will be more elaborate and helpful
@@ -222,7 +250,7 @@ These will be very simple for now, later on they will be more elaborate and help
       resources:
       - sealed-secrets-source.yaml
 
-* Edit   `infrastructure/kustomization.yaml`
+* Append to `infrastructure/kustomization.yaml`
 
       apiVersion: kustomize.config.k8s.io/v1beta1
       kind: Kustomization
@@ -230,22 +258,23 @@ These will be very simple for now, later on they will be more elaborate and help
       - sources
       - sealed-secrets
 
-* Create a pollable link in our cluster:
+* Create a pollable link in our cluster for all _infrastructure_:
 
       flux create kustomization infrastructure \
-        --target-namespace=flux-system \
-        --source=flux-system \
+        --target-namespace=infrastructure \
+        --source=infrastructure \
         --path="./infrastructure" \
         --prune=true \
         --interval=10m \
-        --export > clusters/flurdynet-kickoff2-01/infrastructure.yaml
+        --export > clusters/doubledragon-01/infrastructure.yaml
 
 
 * Push to git
 
-      git add infrastructure/sealed-secrets/kustomization.yaml \
-        infrastructure/kustomization.yaml \
-        clusters/flurdynet-kickoff2-01/infrastructure.yaml;
+      git add infrastructure/sources/kustomization.yaml;
+      git add infrastructure/sealed-secrets/kustomization.yaml;
+      git add infrastructure/kustomization.yaml;
+      git add clusters/doubledragon-01/infrastructure.yaml;
       git commit -m "Activated Sealed Secrets";
       git push
 
@@ -263,7 +292,7 @@ These will be very simple for now, later on they will be more elaborate and help
 
       kubeseal --fetch-cert \
         --controller-name=sealed-secrets-controller \
-        --controller-namespace=flux-system \
+        --controller-namespace=infrastructure \
         > clusters/doubledragon-01/secrets/sealed-secrets-cert.pem
 
   * Some cluster setups may block access to your sealed-secrets-controller,
@@ -271,7 +300,7 @@ e.g. a GKE cluster.
 
      So instead we can temporarily proxy that locally like this:
 
-        kubectl --namespace flux-system port-forward \
+        kubectl --namespace infrastructure port-forward \
           service/sealed-secrets-controller 8081:8080
 
   * And use `curl` to download the certificate instead:
@@ -291,6 +320,7 @@ e.g. a GKE cluster.
 
       flux create source helm ingress-nginx-source \
         --interval=1h \
+        --namespace=infrastructure \
         --url=https://kubernetes.github.io/ingress-nginx \
         --export > infrastructure/sources/ingress-nginx-source.yaml
 
@@ -302,15 +332,15 @@ e.g. a GKE cluster.
       - sealed-secrets-source.yaml
       - ingress-nginx-source.yaml
 
-* Install Helm chart
+* Install the ingress controller with the Helm chart
 
       mkdir -p infrastructure/ingress-nginx;
 
       flux create helmrelease ingress-nginx \
         --interval=1h \
         --release-name=ingress-nginx \
-        --target-namespace=default \
-        --namespace=default \
+        --target-namespace=apps \
+        --namespace=infrastructure \
         --source=HelmRepository/ingress-nginx-source \
         --chart=ingress-nginx \
         --chart-version=">=1.0-4" \
@@ -348,6 +378,8 @@ e.g. a GKE cluster.
 
 * Coming soon...
 
+<!-- Todo: migrate docs from flurdy.com -->
+
 ### Container Registries
 
 To access private Docker container image repositories
@@ -370,38 +402,38 @@ And some secrets to access those.
 
 * Seal the secrets
 
-      mkdir -p clusters/doubledragon-01/registries/default;
-      kubeseal --format=yaml --namespace=default \
+      mkdir -p clusters/doubledragon-01/registries/apps;
+      kubeseal --format=yaml --namespace=apps \
       --cert=clusters/doubledragon-01/secrets/sealed-secrets-cert.pem \
       < gcr-registry.yml \
-      > clusters/doubledragon-01/registries/default/sealed-gcr-registry.yml;
+      > clusters/doubledragon-01/registries/apps/sealed-gcr-registry.yml;
 
-      mkdir -p clusters/doubledragon-01/registries/flux-system;
-      kubeseal --format=yaml --namespace=flux-system\
+      mkdir -p clusters/doubledragon-01/registries/infrastructure;
+      kubeseal --format=yaml --namespace=infrastructure \
       --cert=clusters/doubledragon-01/secrets/sealed-secrets-cert.pem \
       < gcr-registry.yml \
-      > clusters/doubledragon-01/registries/flux-system/sealed-gcr-registry.yml
+      > clusters/doubledragon-01/registries/infrastructure/sealed-gcr-registry.yml
 
 * Add the secrets to Flux
 
-      git add clusters/doubledragon-01/registries/default/sealed-gcr-registry.yml;
-      git add clusters/doubledragon-01/registries/flux-system/sealed-gcr-registry.yml;
+      git add clusters/doubledragon-01/registries/apps/sealed-gcr-registry.yml;
+      git add clusters/doubledragon-01/registries/infrastructure/sealed-gcr-registry.yml;
       git commit -m "GCR registry";
       git push
 
-   You may need more for future namespaces.
+   You may later need more for other and future namespaces, e.g. `default` and `flux-system`
 
 * Lets set up repo image scanning
 
   To check when a new repo tag and image has been added to a registry.
 
-  For example if you have an app that stores its images in a private repo like _GCR.
+  For example if you have an app that stores its images in a private repo like _GCR_.
   Otherwise you can wait to do this step later.
 
       flux create image repository someapp-source \
       --image=ghcr.io/someorg/someuser/somerepo \
       --interval=5m \
-      --namespace=default \
+      --namespace=apps \
       --secret-ref=gcr-registry \
       --export > infrastructure/sources/someapp-source.yaml
 
@@ -416,7 +448,7 @@ And some secrets to access those.
       accessFrom:
         namespaceSelectors:
           - matchLabels:
-              kubernetes.io/metadata.name: flux-system,somenamespace
+              kubernetes.io/metadata.name: flux-system,default,somenamespace
 
   * You can also be specific about the version policy.
 
@@ -433,6 +465,25 @@ And some secrets to access those.
 * Note, for _GCR_ there is the alternative option of a more secure short-lived _acccess token_ instead.
 
   This can be done with Flux. [You need to set up a cronjob to refresh it](https://fluxcd.io/flux/guides/cron-job-image-auth/).
+
+* Add these to `sources/kustomization.yaml`
+
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      resources:
+      - sealed-secrets-source.yaml
+      - ingress-nginx-source.yaml
+      - someapp-source.yaml
+      - someapp-policy.yaml
+
+* Add to git/flux
+
+      git add infrastructure/sources/someapp-source.yaml;
+      git add infrastructure/sources/someapp-policy.yaml;
+      git add infrastructure/sources/kustomization.yaml;
+      git commit -m "Sources for someapp"
+      git push
+
 ## Your first application
 
 Lets create a Hello World app.
@@ -445,6 +496,7 @@ Lets create a Hello World app.
 
       kubectl create deployment hello-deployment \
       --image=nginxdemos/hello:0.3 \
+      --namespace=apps \
       --dry-run=client -o yaml \
       > apps/base/hello/deployment.yaml
 
@@ -457,7 +509,7 @@ and change the app labels to just `hello`
         labels:
           app: hello
         name: hello-deployment
-        namespace: default
+        namespace: apps
       spec:
         replicas: 1
         selector:
@@ -478,7 +530,7 @@ and change the app labels to just `hello`
       kind: Service
       metadata:
         name: hello-service
-        namespace: default
+        namespace: apps
       spec:
         selector:
           app: hello
@@ -493,7 +545,7 @@ and change the app labels to just `hello`
       kind: Ingress
       metadata:
         name: hello-ingress
-        namespace: default
+        namespace: apps
         annotations:
           kubernetes.io/ingress.class: nginx
       spec:
@@ -513,7 +565,7 @@ and change the app labels to just `hello`
 
       apiVersion: kustomize.config.k8s.io/v1beta1
       kind: Kustomization
-      namespace: default
+      namespace: apps
       resources:
         - deployment.yaml
         - service.yaml
@@ -529,7 +581,7 @@ and change the app labels to just `hello`
 
       apiVersion: kustomize.config.k8s.io/v1beta1
       kind: Kustomization
-      namespace: default
+      namespace: apps
       bases:
         - ../../../base/hello
 
@@ -538,7 +590,7 @@ and change the app labels to just `hello`
 
       apiVersion: kustomize.config.k8s.io/v1beta1
       kind: Kustomization
-      namespace: default
+      namespace: apps
       bases:
         - hello
 
@@ -558,10 +610,10 @@ and change the app labels to just `hello`
 * Create a _kustomization_ for all apps in the overlay
 
       flux create kustomization apps \
-        --target-namespace=default \
-        --source=flux-system \
+        --target-namespace=apps \
+        --source=infrastructure \
         --path="./apps/overlays/doubledragon" \
-        --depends-on=./infrastructure.yaml \
+        --depends-on=infrastructure \
         --prune=true \
         --interval=10m \
         --export > clusters/doubledragon-01/apps.yaml
@@ -667,7 +719,7 @@ and change the app labels to just `hello`
 
       kubeseal --fetch-cert \
       --controller-name=sealed-secrets-controller \
-      --controller-namespace=flux-system \
+      --controller-namespace=infrastructure \
       > clusters/doubledragon-02/secrets/sealed-secrets-cert.pem
 
 * Re-encrypt secrets such as the GCR registry secret if needed
@@ -676,7 +728,7 @@ and change the app labels to just `hello`
 
       mkdir -p clusters/doubledragon-02/registries/default;
 
-      kubeseal --format=yaml --namespace=default \
+      kubeseal --format=yaml --namespace=apps \
        --cert=clusters/doubledragon-02/secrets/sealed-secrets-cert.pem \
        < gcr-registry.yml \
        > clusters/doubledragon-02/registries/default/sealed-gcr-registry.yml;
