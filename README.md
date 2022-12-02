@@ -3,7 +3,7 @@ Flux v2 scaffold
 
 Kubernetes cluster configuration that uses GitOps to manage state.
 
-Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
+Includes Flux, Helm, ~~cert-manager~~, Nginx Ingress and Sealed Secrets.
 
 * [fluxcd.io](https://fluxcd.io)
 * [helm.sh](https://helm.sh)
@@ -99,7 +99,13 @@ Make sure you set the `GITHUB_TOKEN` env-var again afterwards.
 
 * Replace _doubledragon-fleet_ with whatever you want to call your repository
 
-Note, Flux can also talk to Bitbucket, Gitlab, Github Enterprise and self-hosted git repositories
+* Edit the `README.md` as you see fit.
+* Edit the `LICENSE` as you see fit.
+
+  The _Lemmings_ and _Double Dragon_ code bases are licensed under the _MIT_ license which lets you pretty much do as you please with it.
+  Though please attribute back if possible.
+
+* Note, Flux can also talk to Bitbucket, Gitlab, Github Enterprise and self-hosted git repositories
 
 ### Install Flux CLI
 
@@ -136,7 +142,7 @@ Note, Flux can also talk to Bitbucket, Gitlab, Github Enterprise and self-hosted
 ### File structure
 
 Unlike Flux v1 which was a simpler one repo per cluster,
-Flux v2 is more flexible with potentially many clusters per repo and more.
+Flux v2 is more flexible with potentially many clusters per repo and more abstractions if desired.
 
 Flux v2 also prefer to use [Kustomize](https://kustomize.io) for templating,
 but you do not have to use it.
@@ -226,7 +232,7 @@ Safely store encrypted secrets in the git repository
         --crds=CreateReplace \
         --export > infrastructure/sealed-secrets/sealed-secrets.yaml;
 
-* Push to git so Flux can act on it
+* Add to git so Flux can act on it
 
       git add infrastructure/sources/sealed-secrets-source.yaml \
         infrastructure/sealed-secrets/sealed-secrets.yaml;
@@ -387,7 +393,7 @@ we need to setup some more sources, image sources.
 And some secrets to access those.
 
 
-* Please follow [flurdy's 'kubernetes-docker-registry guide](https://flurdy.com/docs/kubernetes/registry/kubernetes-docker-registry.html) for your relevant registries.
+* Please follow [flurdy's 'kubernetes-docker-registry guide'](https://flurdy.com/docs/kubernetes/registry/kubernetes-docker-registry.html) for your relevant registries.
 
 #### GCR Google Container Registry
 
@@ -428,12 +434,13 @@ And some secrets to access those.
   To check when a new repo tag and image has been added to a registry.
 
   For example if you have an app that stores its images in a private repo like _GCR_.
+
   Otherwise you can wait to do this step later.
 
       flux create image repository someapp-source \
       --image=ghcr.io/someorg/someuser/somerepo \
       --interval=5m \
-      --namespace=apps \
+      --namespace=infrastructure \
       --secret-ref=gcr-registry \
       --export > infrastructure/sources/someapp-source.yaml
 
@@ -442,13 +449,14 @@ And some secrets to access those.
 
   * This example refers to the `gcr-registry` sealed secret
 
-  If you need it to access other namespaces you can append something like this to the YAML
+  * Append this to the YAML in `infrastructure/sources/someapp-source.yaml`:
 
+        accessFrom:
+          namespaceSelectors:
+            - matchLabels:
+                kubernetes.io/metadata.name: apps
 
-      accessFrom:
-        namespaceSelectors:
-          - matchLabels:
-              kubernetes.io/metadata.name: flux-system,default,somenamespace
+    You can add other namespaces to `apps` as a comma separated list.
 
   * You can also be specific about the version policy.
 
