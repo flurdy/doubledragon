@@ -3,7 +3,8 @@ Flux v2 scaffold
 
 Kubernetes cluster configuration that uses GitOps to manage state.
 
-Includes Flux, Helm, ~~cert-manager~~, Nginx Ingress and Sealed Secrets.
+Includes Flux, Helm, Nginx Ingress and Sealed Secrets.
+<!-- Includes Flux, Helm, ~~cert-manager~~, Nginx Ingress and Sealed Secrets. -->
 
 * [fluxcd.io](https://fluxcd.io)
 * [helm.sh](https://helm.sh)
@@ -33,12 +34,14 @@ Includes Flux, Helm, ~~cert-manager~~, Nginx Ingress and Sealed Secrets.
    1. [Install Flux CLI](#install-flux-cli)
    1. [Bootstrap Flux](#bootstrap-flux-on-your-cluster)
    1. [File structure](#file-structure)
+   1. [Namespaces](#namespaces)
    1. [Sealed Secrets](#sealed-secrets)
    1. [Nginx Ingress](#nginx-ingress)
+   1. ~~[Cert Manager](#cert-manager)~~
    1. [Container registries](#container-registries)
-   <!-- 1. [Cert Manager](#cert-manager) -->
 1. [Your first application](#your-first-application)
-1. [Add anothercluster](#add-another-cluster)
+1. [Troubleshooting](#troubleshooting)
+1. [Add another cluster](#add-another-cluster)
 1. [More information](#more-information-alternatives-suggestions)
 
 ## Pre requisites
@@ -65,7 +68,7 @@ At the same time set the `GITHUB_USER` env-var to your github username.
 
 ### Github CLI
 
-This is optional. Instead you can do this manually via the github website. The [CLI](https://cli.github.com/) command is only used for creating the private repo.
+This is optional. The [CLI](https://cli.github.com/) command is only used for creating the private repo. Instead you can do this manually via the github website.
 
 
       brew install gh;
@@ -454,9 +457,11 @@ And some secrets to access those.
         accessFrom:
           namespaceSelectors:
             - matchLabels:
-                kubernetes.io/metadata.name: apps
+                kubernetes.io/metadata.name: flux-system,apps
 
-    You can add other namespaces to `apps` as a comma separated list.
+    Note, indentation is under `spec`.
+
+    You can add other namespaces as a comma-separated list.
 
   * You can also be specific about the version policy.
 
@@ -532,7 +537,28 @@ and change the app labels to just `hello`
               - image: nginxdemos/hello:0.3
                 name: hello
 
-* And a service at `apps/base/hello/service.yaml`
+  For the _Hello_ deployment this is sufficent,
+  but for more normal workflows you should most likely add more e.g. resource limits, env-vars, secrets etc.
+
+      spec:
+        containers:
+          - image: gcr.io/somethingsomething:latest
+            name: something-container
+            ports:
+              - containerPort: 1234
+            resources:
+              requests:
+                memory: "250Mi"
+                cpu: "50m"
+              limits:
+                memory: "800Mi"
+                cpu: "250m"
+        imagePullSecrets:
+          - name: gcr-registry
+
+   That is out-of-scope for this tutorial though.
+
+* Add a service at `apps/base/hello/service.yaml`
 
       apiVersion: v1
       kind: Service
@@ -641,7 +667,6 @@ and change the app labels to just `hello`
 
 * This should show a basic hello world page, with an Nginx logo and some server address, name and date details.
 
-
 ### Update application
 
 * Updating the Docker image in the Docker registry should trigger a rollout to the cluster.
@@ -675,6 +700,47 @@ and change the app labels to just `hello`
 * Sometimes whilst troubleshooting you will have to use the scalpel and use `kubectl create|apply|delete` or `flux create`.
 
    But minimise the usage, and try to update the yaml to reflect any permanent changes.
+
+## Troubleshooting
+
+Frequent issues and how to monitor.
+
+### Tail the logs
+
+*_Flux_ logs
+
+      flux logs -Af --since 3h
+
+* _Kubernetes_ logs
+
+      kubectl logs podname -f
+
+### Watch statuses
+
+*_Flux_ kustomization status
+
+      flux get kustomizations --watch
+
+* _Kubernetes_ status
+
+      kubectl get deploy,service,ingress,pods,secret,imagerepository -n apps
+
+  Or watch a single resource type
+
+      kubectl get deploy -A --watch
+
+### Known possible issues
+
+* Nginx: `x509 certificate is not valid`
+
+  Happens sometimes with the Nginx ingresses.
+  Seems to be a known problem that require [manual patching](https://github.com/jet/kube-webhook-certgen#patch).
+  Or as I fix it:
+
+  * Comment out the _nginx controller_ and the ingresses from the _kustomization_ files.
+  * Wait until _Flux_ has removed them from the cluster.
+  * Uncomment and add them back in.
+  * Note this may change the external IP assigned to the cluster's load balancer.
 
 ## Add another cluster
 
