@@ -43,6 +43,7 @@ Includes Flux, Helm, Nginx Ingress and Sealed Secrets.
 1. [Troubleshooting](#troubleshooting)
 1. [Add another cluster](#add-another-cluster)
 1. [More information](#more-information-alternatives-suggestions)
+   1. [License](#license)
 
 ## Pre requisites
 
@@ -79,6 +80,8 @@ At the same time set the `GITHUB_USER` env-var to your github username.
       git add README.md LICENSE;
       git commit -m "Starting our double dragon fleet";
 
+  Replace _doubledragon-fleet_ with whatever you want to call your repository
+
 * Create a private github repository
 
   Manually create a private `doubledragon-fleet` repo via [github.com](https://github.com)
@@ -101,13 +104,9 @@ At the same time set the `GITHUB_USER` env-var to your github username.
 
       git push -u origin main
 
-* Replace _doubledragon-fleet_ with whatever you want to call your repository
-
 * Edit the `README.md` as you see fit.
-* Edit the `LICENSE` as you see fit.
 
-  The _Lemmings_ and _Double Dragon_ code bases are licensed under the _MIT_ license which lets you pretty much do as you please with it.
-  Though please attribute back if possible.
+* Edit the `LICENSE` as you see fit.
 
 * Note, Flux can also talk to Bitbucket, Gitlab, Github Enterprise and self-hosted git repositories
 
@@ -880,7 +879,21 @@ Frequent issues and how to monitor.
 * Certain operation takes a few minutes, e.g. pod creation, waiting on Flux scan polling.
 * Client tools are also available on Linux, Windows and more.
 
-## Versions
+### License
+
+
+The _Lemmings_ and _Double Dragon_ code bases are licensed under the _MIT_ license which lets you pretty much do as you please with it.
+
+Though please attribute back if possible.
+
+### Attributions
+
+* This guide heavily used the docs and example project available on the official Flux website
+   * [fluxcd.io/flux](https://fluxcd.io/flux/)
+* Kubernetes official docs
+   * [kubernetes.io/docs/](https://kubernetes.io/docs/)
+
+### Versions
 
 * 2022-11-10 Double Dragon refreshed
 * 2021-07-10 Flux 2. Lemmings => Double Dragon
