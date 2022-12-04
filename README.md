@@ -1,4 +1,4 @@
-# doubledragon
+# Double Dragon
 Flux v2 scaffold
 
 Kubernetes cluster configuration that uses GitOps to manage state.
@@ -8,10 +8,10 @@ Includes Flux, Helm, Nginx Ingress and Sealed Secrets.
 
 * [fluxcd.io](https://fluxcd.io)
 * [helm.sh](https://helm.sh)
-* [github.com/jetstack/cert-manager](https://github.com/jetstack/cert-manager)
 * [kubernetes.github.io/ingress-nginx/](https://kubernetes.github.io/ingress-nginx/)
 * [github.com/bitnami-labs/sealed-secrets](https://github.com/bitnami-labs/sealed-secrets)
 * [kustomize.io](https://kustomize.io)
+<!-- * ~~[github.com/jetstack/cert-manager](https://github.com/jetstack/cert-manager)~~ -->
 
 ![Double Dragon](https://static.wixstatic.com/media/cf1e64_4736286d1baa49ee99802212ada59dee~mv2.png/v1/fill/w_498,h_664,al_c,usm_0.66_1.00_0.01/cf1e64_4736286d1baa49ee99802212ada59dee~mv2.png "arcade!")
 
@@ -49,8 +49,8 @@ Includes Flux, Helm, Nginx Ingress and Sealed Secrets.
 ### Kubernetes tools and cluster
 
 *     brew install kubectl
-* Create Kubernetes cluster (see *Kubernetes as a Service providers* below)
-* Set up Kubernetes context (see provider CLIs and `kubectx` below)
+* Create Kubernetes cluster (see [Kubernetes as a Service providers](#Kubernetes-as-a-Service) below)
+* Set up Kubernetes context (see [provider CLIs](#Kubernetes-as-a-Service) and [kubectx CLI](#Kubernetes-as-a-Service)  below)
 * Test cluster connection:
 
       kubectl cluster-info
@@ -66,22 +66,6 @@ In your dotfiles make sure you expose it as `GITHUB_TOKEN`.
 At the same time set the `GITHUB_USER` env-var to your github username.
 (Nudge: [direnv](https://direnv.net/))
 
-### Github CLI
-
-This is optional. The [CLI](https://cli.github.com/) command is only used for creating the private repo. Instead you can do this manually via the github website.
-
-
-      brew install gh;
-      gh auth login
-
-Note, the CLI for some reason does not like if Github PAT env-var is set so you may have to temporarily unset when using it.
-
-     # In Bash:
-     unset GITHUB_TOKEN
-     # In Fish:
-     set -e GITHUB_TOKEN
-
-Make sure you set the `GITHUB_TOKEN` env-var again afterwards.
 ## Double Dragon install
 
 ### Fork/Clone repository
@@ -95,9 +79,26 @@ Make sure you set the `GITHUB_TOKEN` env-var again afterwards.
       git add README.md LICENSE;
       git commit -m "Starting our double dragon fleet";
 
-* And push it to github as a private repo
+* Create a private github repository
 
+  Manually create a private `doubledragon-fleet` repo via [github.com](https://github.com)
+  or with the [Github CLI](https://cli.github.com/)
+
+      brew install gh;
+      gh auth login;
       gh repo create --private doubledragon-fleet -r origin;
+
+  Note, the CLI for some reason does not like if Github PAT env-var is set so you may have to temporarily unset when using it.
+
+       # In Bash:
+       unset GITHUB_TOKEN
+       # In Fish:
+       set -e GITHUB_TOKEN
+
+  Make sure you set the `GITHUB_TOKEN` env-var again afterwards.
+
+* And push your local repo to the github repo
+
       git push -u origin main
 
 * Replace _doubledragon-fleet_ with whatever you want to call your repository
@@ -121,14 +122,13 @@ Make sure you set the `GITHUB_TOKEN` env-var again afterwards.
 
 ### Bootstrap Flux on your cluster
 
-*
-      flux bootstrap github \
-        --components-extra=image-reflector-controller,image-automation-controller \
-        --owner=$GITHUB_USER \
-        --repository=doubledragon-fleet \
-        --branch=main \
-        --path=./clusters/doubledragon-01 \
-        --personal
+    flux bootstrap github \
+      --components-extra=image-reflector-controller,image-automation-controller \
+      --owner=$GITHUB_USER \
+      --repository=doubledragon-fleet \
+      --branch=main \
+      --path=./clusters/doubledragon-01 \
+      --personal
 
 * This assumes the repo is called _doubledragon-fleet_ (it will create it if it does not exist).
    And names your initial cluster as _doubledragon-01_.
@@ -707,7 +707,7 @@ Frequent issues and how to monitor.
 
 ### Tail the logs
 
-*_Flux_ logs
+* _Flux_ logs
 
       flux logs -Af --since 3h
 
@@ -717,7 +717,7 @@ Frequent issues and how to monitor.
 
 ### Watch statuses
 
-*_Flux_ kustomization status
+* _Flux_ kustomization status
 
       flux get kustomizations --watch
 
@@ -829,12 +829,17 @@ Frequent issues and how to monitor.
 
 ## More information, alternatives, suggestions
 
-* Kubernetes as a Service
+### Kubernetes as a Service
+
+* Cloud providers
+
   * Amazon AWS EKS: [aws.amazon.com/eks/](https://aws.amazon.com/eks/)
   * Google Cloud GKE: [cloud.google.com/kubernetes-engine/](https://cloud.google.com/kubernetes-engine/)
   * Microsoft Azure AKS: [azure.microsoft.com/en-us/services/kubernetes-service/](https://azure.microsoft.com/en-us/services/kubernetes-service/)
   * DigitalOcean Kubernetes: [www.digitalocean.com/products/kubernetes/](https://www.digitalocean.com/products/kubernetes/)
-* Cloud provider CLI
+
+* Cloud provider CLIs
+
   * [cloud.google.com/sdk/](https://cloud.google.com/sdk/)
 
         brew cask install google-cloud-sdk
@@ -850,7 +855,9 @@ Frequent issues and how to monitor.
   * [github.com/Azure/azure-cli](https://github.com/Azure/azure-cli)
 
         brew install azure-cli
+
 * Tools
+
   * [github.com/ahmetb/kubectx](https://github.com/ahmetb/kubectx)
 
         brew install kubectx
