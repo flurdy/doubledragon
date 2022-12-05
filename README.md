@@ -406,7 +406,6 @@ e.g. a GKE cluster.
 
 * Install Cert Manager Helm and CRDs
 
-
   You need some _CustomResourceDefinitions_ for _cert-manager_ to work
 
       mkdir infrastructure/cert-manager;
@@ -423,6 +422,36 @@ e.g. a GKE cluster.
         --chart-version=">=1.10.1" \
         --crds=CreateReplace \
         --export > infrastructure/cert-manager/cert-manager.yaml
+
+
+  * Create kustomization `infrastructure/cert-manager/kustomization.yaml`
+
+        apiVersion: kustomize.config.k8s.io/v1beta1
+        kind: Kustomization
+        resources:
+        - cert-manager-crds.yaml
+        - cert-manager.yaml
+
+  * Append it to infrastructure kustomization `infrastructure/kustomization.yaml`
+
+        apiVersion: kustomize.config.k8s.io/v1beta1
+        kind: Kustomization
+        resources:
+        - sources
+        - sealed-secrets
+        - ingress-nginx
+        - cert-manager
+
+* Add to repo and push
+
+      git add infrastructure/sources/jetstack-source.yaml;
+      git add infrastructure/sources/kustomization.yaml;
+      git add infrastructure/cert-manager/cert-manager-crds.yaml;
+      git add infrastructure/cert-manager/cert-manager.yaml;
+      git add infrastructure/cert-manager/kustomization.yaml;
+      git add infrastructure/kustomization.yaml;
+      git commit -m "Cert-manager";
+      git push
 
 * Verify Cert manager works
 
