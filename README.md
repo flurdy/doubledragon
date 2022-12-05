@@ -3,15 +3,14 @@ Flux v2 scaffold
 
 Kubernetes cluster configuration that uses GitOps to manage state.
 
-Includes Flux, Helm, Nginx Ingress and Sealed Secrets.
-<!-- Includes Flux, Helm, ~~cert-manager~~, Nginx Ingress and Sealed Secrets. -->
+Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
 
 * [fluxcd.io](https://fluxcd.io)
 * [helm.sh](https://helm.sh)
 * [kubernetes.github.io/ingress-nginx/](https://kubernetes.github.io/ingress-nginx/)
 * [github.com/bitnami-labs/sealed-secrets](https://github.com/bitnami-labs/sealed-secrets)
+* [github.com/jetstack/cert-manager](https://github.com/jetstack/cert-manager)
 * [kustomize.io](https://kustomize.io)
-<!-- * ~~[github.com/jetstack/cert-manager](https://github.com/jetstack/cert-manager)~~ -->
 
 ![Double Dragon](https://static.wixstatic.com/media/cf1e64_4736286d1baa49ee99802212ada59dee~mv2.png/v1/fill/w_498,h_664,al_c,usm_0.66_1.00_0.01/cf1e64_4736286d1baa49ee99802212ada59dee~mv2.png "arcade!")
 
@@ -37,7 +36,7 @@ Includes Flux, Helm, Nginx Ingress and Sealed Secrets.
    1. [Namespaces](#namespaces)
    1. [Sealed Secrets](#sealed-secrets)
    1. [Nginx Ingress](#nginx-ingress)
-   1. ~~[Cert Manager](#cert-manager)~~
+   1. [Cert Manager](#cert-manager)
    1. [Container registries](#container-registries)
 1. [Your first application](#your-first-application)
 1. [Troubleshooting](#troubleshooting)
@@ -210,7 +209,10 @@ So a Flux repo may look like this at the start:
 
 ### Sealed Secrets
 
-Safely store encrypted secrets in the git repository
+Safely store encrypted secrets in the git repository.
+
+There are several alternative encrypted secrets solutions, such as [Mozilla's SOPS](https://fluxcd.io/flux/guides/mozilla-sops/),
+but Sealed Secrets works well for me.
 
 * Add a Helm repository for Sealed Secrets
 
@@ -382,12 +384,202 @@ e.g. a GKE cluster.
       git commit -m "Nginx Ingress";
       git push
 
-### Cert Manager
+### Cert manager
+#### Install cert-manager
 
-* Coming soon...
+* Add a Jetstack source repo
 
-<!-- Todo: migrate docs from flurdy.com -->
+      flux create source helm jetstack-source \
+        --interval=1h \
+        --namespace=infrastructure \
+        --url=https://charts.jetstack.io \
+        --export > infrastructure/sources/jetstack-source.yaml
 
+  * Append it to the exiting sources kustomization `infrastructure/sources/kustomization.yaml`
+
+        apiVersion: kustomize.config.k8s.io/v1beta1
+        kind: Kustomization
+        resources:
+        - sealed-secrets-source.yaml
+        - ingress-nginx-source.yaml
+        - jetstack-source.yaml
+
+* Install Cert Manager Helm and CRDs
+
+
+  You need some _CustomResourceDefinitions_ for _cert-manager_ to work
+
+      mkdir infrastructure/cert-manager;
+
+      curl -Lo infrastructure/cert-manager/cert-manager-crds.yaml \
+      https://github.com/cert-manager/cert-manager/releases/download/v1.10.1/cert-manager.crds.yaml;
+
+      flux create helmrelease cert-manager \
+        --interval=1h \
+        --release-name=cert-manager \
+        --namespace=infrastructure \
+        --source=HelmRepository/jetstack-source \
+        --chart=cert-manager \
+        --chart-version=">=1.10.1" \
+        --crds=CreateReplace \
+        --export > infrastructure/cert-manager/cert-manager.yaml
+
+* Verify Cert manager works
+
+  * Install the cert-manager CLI
+
+    Optional but handy
+
+        brew install cmctl
+
+  * Verify
+
+        cmctl check api
+
+    Hopefully that will return "`The cert-manager API is ready`"
+
+
+#### Certificate issuers
+
+Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt](https://letsencrypt.org/), so that testing in _staging does not flood the _prod_ instance.
+
+    mkdir clusters/doubledragon-01/certificate-issuers
+
+* Create and edit the staging issuer at
+
+  `clusters/doubledragon-01/certificate-issuers/letsencrypt-issuer-staging.yaml`
+
+      apiVersion: cert-manager.io/v1
+      kind: ClusterIssuer
+      metadata:
+        name: letsencrypt-staging
+      spec:
+        acme:
+          server: https://acme-staging-v02.api.letsencrypt.org/directory
+          email: youremail@example.com
+          privateKeySecretRef:
+            name: letsencrypt-staging-secret
+          solvers:
+          - http01:
+              ingress:
+                class: nginx
+
+* Replace `youremail@example.com` with an email address you have access to
+
+* Add to _flux_ and watch till active
+
+      git add clusters/doubledragon-01/certificate-issuers/letsencrypt-issuer-staging.yaml;
+      git commit -m "Staging issuer";
+      git push;
+      kube get clusterissuer -A --watch
+
+* Secure an app
+
+  I.e. add a TLS certificate to an ingress.
+
+  This step may have to wait until you add your own apps later on in the tutorial.
+
+* Edit your app's _ingress_ `apps/base/someapp/ingress.yaml`
+
+  Add the annotation and _tls_ sections
+
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-staging
+        name: someapp-ingress
+        namespace: apps
+      spec:
+        rules:
+        - host: someapp.example.com
+          http:
+            paths:
+            - pathType: Prefix
+              path: /
+              backend:
+                service:
+                  name: someapp-service
+                  port:
+                    number: 80
+        tls:
+        - hosts:
+          - someapp.example.com
+          secretName: someapp-cert-staging
+
+* Add to git
+
+      git add apps/base/someapp/ingress.yaml;
+      git commit -m "Secured someapp";
+      git push;
+      kube get ingress -n apps --watch
+
+  Soon the `someapp.example.com` line will show 443 as available port. It all ok.
+
+  Note, your browser will throw a warning when accessing this site
+  as the certificate for staging is not signed. Unlike prod.
+
+* Now lets add a prod issuer, create and edit
+
+  `clusters/doubledragon-01/certificate-issuers/letsencrypt-issuer-prod.yaml`
+
+      apiVersion: cert-manager.io/v1
+      kind: ClusterIssuer
+      metadata:
+        name: letsencrypt-prod
+      spec:
+        acme:
+          server: https://acme-v02.api.letsencrypt.org/directory
+          email: youremail@example.com
+          privateKeySecretRef:
+            name: letsencrypt-prod-secret
+          solvers:
+          - http01:
+              ingress:
+                class: nginx
+
+* Add to _flux_ and watch till active
+
+      git add clusters/doubledragon-01/certificate-issuers/letsencrypt-issuer-prod.yaml;
+      git commit -m "Prod issuer";
+      git push;
+      kube get clusterissuer -A --watch
+
+* Update the certificate for your app
+
+  Change the `cluster-issuer` annotation and `sercretName` in
+  `apps/base/someapp/ingress.yaml`
+
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+        name: someapp-ingress
+        namespace: apps
+      spec:
+        rules:
+        - host: someapp.example.com
+          http:
+            paths:
+            - pathType: Prefix
+              path: /
+              backend:
+                service:
+                  name: someapp-service
+                  port:
+                    number: 80
+        tls:
+        - hosts:
+          - someapp.example.com
+          secretName: someapp-cert-prod
+
+* Push and check when the certificate change goes live
+
+      git add apps/base/someapp/ingress.yaml;
+      git commit -m "Secured someapp with prod cert";
+      git push;
+      kube describe ingress someapp-ingress -n apps --watch
 ### Container Registries
 
 To access private Docker container image repositories
@@ -683,6 +875,28 @@ and change the app labels to just `hello`
 ## Go wild
 
 * Add/update your deployments, services, charts, docker registries, secrets, kustomizations etc
+
+### Usual steps for a simple web app
+
+1. Add source if in a private repo. And add/append to source _kustomization_.
+
+   * `infrastructure/sources/someapp-source.yaml`
+   * `infrastructure/sources/kustomization.yaml`
+   * `infrastructure/kustomization.yaml`
+
+1. Add deploy, service, ingress to new app base folder.
+
+   * `apps/base/someapp/deployment.yaml`
+   * `apps/base/someapp/service.yaml`
+   * `apps/base/someapp/ingress.yaml`
+
+1. Add/append to apps _kustomization_ and overlay.
+
+   * `apps/base/someapp/kustomization.yaml`
+   * `apps/base/kustomization.yaml`
+   * `apps/overlay/someapp/kustomization.yaml`
+   * `apps/overlay/kustomization.yaml`
+
 ## Advise: Don't touch
 
 * Once Flux is running, by convention avoid using `kubectl create|apply` etc.
@@ -722,7 +936,7 @@ Frequent issues and how to monitor.
 
 * _Kubernetes_ status
 
-      kubectl get deploy,service,ingress,pods,secret,imagerepository -n apps
+      kubectl get deploy,service,ingress,pods,secret,imagerepository,clusterissuer -n apps
 
   Or watch a single resource type
 
