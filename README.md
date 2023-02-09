@@ -30,6 +30,7 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
 1. [Pre requisites](#contributors)
 1. [Double Dragon install](#double-dragon-install)
    1. [Clone repository](#forkclone-repository)
+   1. [Cluster environment variables](#handy-cluster-environment-variables)
    1. [Install Flux CLI](#install-flux-cli)
    1. [Bootstrap Flux](#bootstrap-flux-on-your-cluster)
    1. [File structure](#file-structure)
@@ -98,6 +99,7 @@ At the same time set the `GITHUB_USER` env-var to your github username.
 
        # In Bash:
        unset GITHUB_TOKEN
+
        # In Fish:
        set -e GITHUB_TOKEN
 
@@ -113,6 +115,22 @@ At the same time set the `GITHUB_USER` env-var to your github username.
 
 * Note, Flux can also talk to Bitbucket, Gitlab, Github Enterprise and self-hosted git repositories
 
+### Cluster environment variables
+
+* Lets add the cluster names and others as environment variables so that most commands in this howto can be copy-pasted directly
+
+       # In Bash:
+       export DOUBLEDRAGON_REPO=doubledragon-fleet;
+       export DOUBLEDRAGON_NAME=doubledragon;
+       export DOUBLEDRAGON_CLUSTER=doubledragon-01
+
+       # In Fish:
+       set -x DOUBLEDRAGON_REPO doubledragon-fleet;
+       set -x DOUBLEDRAGON_NAME doubledragon;
+       set -x DOUBLEDRAGON_CLUSTER doubledragon-01
+
+  Replace with whatever you decide to call your repository and cluster
+
 ### Install Flux CLI
 
 *
@@ -127,18 +145,14 @@ At the same time set the `GITHUB_USER` env-var to your github username.
     flux bootstrap github \
       --components-extra=image-reflector-controller,image-automation-controller \
       --owner=$GITHUB_USER \
-      --repository=doubledragon-fleet \
+      --repository=$DOUBLEDRAGON_REPO \
       --branch=main \
-      --path=./clusters/doubledragon-01 \
+      --path=./clusters/$DOUBLEDRAGON_CLUSTER \
       --personal
 
-* This assumes the repo is called _doubledragon-fleet_ (it will create it if it does not exist).
-   And names your initial cluster as _doubledragon-01_.
+* This assumes the repo is called _doubledragon-fleet_ (`$DOUBLEDRAGON_REPO`) (it will create it if it does not exist).
+   And names your initial cluster as _doubledragon-01_ (`$DOUBLEDRAGON_CLUSTER`).
    Change as appropriate
-
-<!-- * Note previously I also included:
-      --components-extra=image-reflector-controller,image-automation-controller \
-   but that is under review if still needed for polling image updates -->
 
 * Update your local repo with the _origin_ changes
 
@@ -169,15 +183,15 @@ So a Flux repo may look like this at the start:
 
 
 * `apps/base` is where you define your apps; deployments, services, etc.
-* `apps/overlays/clustername` is where you choose which apps a cluster has,
+* `apps/overlays/doubledragon` is where you choose which apps a cluster has,
   and any customization specific to that cluster.
-* `cluster/clustername` with links to apps and infrastructure active in your specific cluster.
+* `cluster/doubledragon-01` with links to apps and infrastructure active in your specific cluster.
 * `infrastructure/sources` where to find images from registries, Helm repos, etc.
 
 * Create some of these folders:
 
       mkdir -p apps/base;
-      mkdir -p apps/overlays/doubledragon;
+      mkdir -p apps/overlays/$DOUBLEDRAGON_NAME;
       mkdir -p infrastructure/sources
 
 * Check the file structure
@@ -194,7 +208,7 @@ So a Flux repo may look like this at the start:
   (For some reason _kustomize_ does not let you add several namespaces
   in one _kustomization_ so we will add plain files to the cluster)
 
-* Edit `clusters/doubledragon-01/namespaces.yaml`
+* Edit `clusters/$DOUBLEDRAGON_CLUSTER/namespaces.yaml`
 
       apiVersion: v1
       kind: Namespace
@@ -208,7 +222,7 @@ So a Flux repo may look like this at the start:
 
 * Push to _Flux_
 
-      git add clusters/doubledragon-01/namespaces.yaml;
+      git add clusters/$DOUBLEDRAGON_CLUSTER/namespaces.yaml;
       git commit -m "Namespaces";
       git push
 
@@ -281,7 +295,7 @@ These will be very simple for now, later on they will be more elaborate and help
         --path="./infrastructure" \
         --prune=true \
         --interval=10m \
-        --export > clusters/doubledragon-01/infrastructure.yaml
+        --export > clusters/$DOUBLEDRAGON_CLUSTER/infrastructure.yaml
 
 
 * Push to git
@@ -289,7 +303,7 @@ These will be very simple for now, later on they will be more elaborate and help
       git add infrastructure/sources/kustomization.yaml;
       git add infrastructure/sealed-secrets/kustomization.yaml;
       git add infrastructure/kustomization.yaml;
-      git add clusters/doubledragon-01/infrastructure.yaml;
+      git add clusters/$DOUBLEDRAGON_CLUSTER/infrastructure.yaml;
       git commit -m "Activated Sealed Secrets";
       git push
 
@@ -303,12 +317,12 @@ These will be very simple for now, later on they will be more elaborate and help
 
 * Retrieve public key from this cluster
 
-      mkdir -p clusters/doubledragon-01/secrets;
+      mkdir -p clusters/$DOUBLEDRAGON_CLUSTER/secrets;
 
       kubeseal --fetch-cert \
         --controller-name=sealed-secrets-controller \
         --controller-namespace=infrastructure \
-        > clusters/doubledragon-01/secrets/sealed-secrets-cert.pem
+        > clusters/$DOUBLEDRAGON_CLUSTER/secrets/sealed-secrets-cert.pem
 
   * Some cluster setups may block access to your sealed-secrets-controller,
 e.g. a GKE cluster.
@@ -321,11 +335,11 @@ e.g. a GKE cluster.
   * And use `curl` to download the certificate instead:
 
         curl localhost:8081/v1/cert.pem \
-          > clusters/doubledragon-01/secrets/sealed-secrets-cert.pem
+          > clusters/$DOUBLEDRAGON_CLUSTER/secrets/sealed-secrets-cert.pem
 
 * Add it to source control
 
-      git add clusters/doubledragon-01/secrets/sealed-secrets-cert.pem;
+      git add clusters/$DOUBLEDRAGON_CLUSTER/secrets/sealed-secrets-cert.pem;
       git commit -m "Sealed Secret public key";
       git push
 
@@ -477,11 +491,11 @@ e.g. a GKE cluster.
 
 Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt](https://letsencrypt.org/), so that testing in _staging_ does not flood the _prod_ instance.
 
-    mkdir clusters/doubledragon-01/certificate-issuers
+    mkdir clusters/$DOUBLEDRAGON_CLUSTER/certificate-issuers
 
 * Create and edit the staging issuer at
 
-  `clusters/doubledragon-01/certificate-issuers/letsencrypt-issuer-staging.yaml`
+  `clusters/$DOUBLEDRAGON_CLUSTER/certificate-issuers/letsencrypt-issuer-staging.yaml`
 
       apiVersion: cert-manager.io/v1
       kind: ClusterIssuer
@@ -555,7 +569,7 @@ Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt]
 
 * Now lets add a prod issuer, create and edit
 
-  `clusters/doubledragon-01/certificate-issuers/letsencrypt-issuer-prod.yaml`
+  `clusters/$DOUBLEDRAGON_CLUSTER/certificate-issuers/letsencrypt-issuer-prod.yaml`
 
       apiVersion: cert-manager.io/v1
       kind: ClusterIssuer
@@ -574,7 +588,7 @@ Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt]
 
 * Add to _flux_ and watch till active
 
-      git add clusters/doubledragon-01/certificate-issuers/letsencrypt-issuer-prod.yaml;
+      git add clusters/$DOUBLEDRAGON_CLUSTER/certificate-issuers/letsencrypt-issuer-prod.yaml;
       git commit -m "Prod issuer";
       git push;
       kube get clusterissuer -A --watch
@@ -639,22 +653,22 @@ And some secrets to access those.
 
 * Seal the secrets
 
-      mkdir -p clusters/doubledragon-01/registries/apps;
+      mkdir -p clusters/$DOUBLEDRAGON_CLUSTER/registries/apps;
       kubeseal --format=yaml --namespace=apps \
-      --cert=clusters/doubledragon-01/secrets/sealed-secrets-cert.pem \
+      --cert=clusters/$DOUBLEDRAGON_CLUSTER/secrets/sealed-secrets-cert.pem \
       < gcr-registry.yml \
-      > clusters/doubledragon-01/registries/apps/sealed-gcr-registry.yaml;
+      > clusters/$DOUBLEDRAGON_CLUSTER/registries/apps/sealed-gcr-registry.yaml;
 
-      mkdir -p clusters/doubledragon-01/registries/infrastructure;
+      mkdir -p clusters/$DOUBLEDRAGON_CLUSTER/registries/infrastructure;
       kubeseal --format=yaml --namespace=infrastructure \
-      --cert=clusters/doubledragon-01/secrets/sealed-secrets-cert.pem \
+      --cert=clusters/$DOUBLEDRAGON_CLUSTER/secrets/sealed-secrets-cert.pem \
       < gcr-registry.yml \
-      > clusters/doubledragon-01/registries/infrastructure/sealed-gcr-registry.yaml
+      > clusters/$DOUBLEDRAGON_CLUSTER/registries/infrastructure/sealed-gcr-registry.yaml
 
 * Add the secrets to Flux
 
-      git add clusters/doubledragon-01/registries/apps/sealed-gcr-registry.yaml;
-      git add clusters/doubledragon-01/registries/infrastructure/sealed-gcr-registry.yaml;
+      git add clusters/$DOUBLEDRAGON_CLUSTER/registries/apps/sealed-gcr-registry.yaml;
+      git add clusters/$DOUBLEDRAGON_CLUSTER/registries/infrastructure/sealed-gcr-registry.yaml;
       git commit -m "GCR registry";
       git push
 
@@ -845,7 +859,7 @@ and change the app labels to just `hello`
 
      mkdir -p apps/overlays/doubledragon/hello;
 
-  Edit `apps/overlays/doubledragon/hello/kustomization.yaml`
+  Edit `apps/overlays/$DOUBLEDRAGON_NAME/hello/kustomization.yaml`
 
   In more complicated apps this may have some overrides but for now very simple.
 
@@ -856,7 +870,7 @@ and change the app labels to just `hello`
         - ../../../base/hello
 
 
-  Edit `apps/overlays/doubledragon/kustomization.yaml`
+  Edit `apps/overlays/$DOUBLEDRAGON_NAME/kustomization.yaml`
 
       apiVersion: kustomize.config.k8s.io/v1beta1
       kind: Kustomization
@@ -870,8 +884,8 @@ and change the app labels to just `hello`
       git add apps/base/hello/service.yaml;
       git add apps/base/hello/ingress.yaml;
       git add apps/base/hello/kustomization.yaml;
-      git add apps/overlays/doubledragon/hello/kustomization.yaml;
-      git add apps/overlays/doubledragon/kustomization.yaml;
+      git add apps/overlays/$DOUBLEDRAGON_NAME/hello/kustomization.yaml;
+      git add apps/overlays/$DOUBLEDRAGON_NAME/kustomization.yaml;
       git commit -m "Hello app files"
       git push
 
@@ -882,11 +896,11 @@ and change the app labels to just `hello`
       flux create kustomization apps \
         --target-namespace=apps \
         --source=infrastructure \
-        --path="./apps/overlays/doubledragon" \
+        --path="./apps/overlays/$DOUBLEDRAGON_NAME" \
         --depends-on=infrastructure \
         --prune=true \
         --interval=10m \
-        --export > clusters/doubledragon-01/apps.yaml
+        --export > clusters/$DOUBLEDRAGON_CLUSTER/apps.yaml
 ### Test application
 
 * Find the ingress controller's `External IP`
@@ -911,7 +925,7 @@ and change the app labels to just `hello`
 
 ### Delete application
 
-* Remove / comment out the app in `clusters/doubledragon-01/apps.yaml`
+* Remove / comment out the app in `clusters/$DOUBLEDRAGON_CLUSTER/apps.yaml`
 
   That should cascade the changes via the aggregated _kustomize_, and remove the ingress, service and deployment from the live cluster.
 
@@ -939,7 +953,8 @@ and change the app labels to just `hello`
 
    * `apps/base/someapp/kustomization.yaml`
    * `apps/base/kustomization.yaml`
-   * `apps/overlay/someapp/kustomization.yaml`
+   * `apps/overlay/somecluster/someapp/kustomization.yaml`
+   * `apps/overlay/somecluster/kustomization.yaml`
    * `apps/overlay/kustomization.yaml`
 
 ## Advise: Don't touch
@@ -1018,25 +1033,34 @@ Frequent issues and how to monitor.
 
 * Set as the current kubernetes context
 
+
 * Add another cluster folder e.g. `clusters/doubledragon-02`
 
       mkdir -p clusters/doubledragon-02;
 
-* Bootstrap the new cluster with `doubledragon-02` as the name
+* Maybe export a new env-var
+
+       # In Bash:
+       export DOUBLEDRAGON_CLUSTER_NEW=doubledragon-02
+
+       # In Fish:
+       set -x DOUBLEDRAGON_CLUSTER_NEW doubledragon-02
+
+* Bootstrap the new cluster with `doubledragon-02` or `$DOUBLEDRAGON_CLUSTER_NEW` as the name
 
       flux bootstrap github \
         --owner=$GITHUB_USER \
-        --repository=doubledragon-fleet \
+        --repository=DOUBLEDRAGON_REPO \
         --branch=main \
-        --path=./clusters/doubledragon-02 \
+        --path=./clusters/$DOUBLEDRAGON_CLUSTER_NEW \
         --personal
 
 ### Copy and re-initialise infrastructure
 
 * Copy the `infrastructure.yaml` kustomization to the new cluster
 
-      cp clusters/doubledragon-01/infrastructure.yaml clusters/doubledragon-02/;
-      git add clusters/doubledragon-02/infrastructure.yaml;
+      cp clusters/$DOUBLEDRAGON_CLUSTER/infrastructure.yaml clusters/$DOUBLEDRAGON_CLUSTER_NEW/;
+      git add clusters/$DOUBLEDRAGON_CLUSTER_NEW/infrastructure.yaml;
       git commit -m "Double Dragon II infrastructure";
       git push
 
@@ -1052,20 +1076,20 @@ Frequent issues and how to monitor.
       kubeseal --fetch-cert \
       --controller-name=sealed-secrets-controller \
       --controller-namespace=infrastructure \
-      > clusters/doubledragon-02/secrets/sealed-secrets-cert.pem
+      > clusters/$DOUBLEDRAGON_CLUSTER_NEW/secrets/sealed-secrets-cert.pem
 
 * Re-encrypt secrets such as the GCR registry secret if needed
 
   E.g.
 
-      mkdir -p clusters/doubledragon-02/registries/default;
+      mkdir -p clusters/$FLUX_CLUSTER_NEW/registries/default;
 
       kubeseal --format=yaml --namespace=apps \
-       --cert=clusters/doubledragon-02/secrets/sealed-secrets-cert.pem \
+       --cert=clusters/$DOUBLEDRAGON_CLUSTER_NEW/secrets/sealed-secrets-cert.pem \
        < gcr-registry.yml \
-       > clusters/doubledragon-02/registries/default/sealed-gcr-registry.yml;
+       > clusters/$DOUBLEDRAGON_CLUSTER_NEW/registries/default/sealed-gcr-registry.yml;
 
-      git add clusters/doubledragon-02/registries/default/sealed-gcr-registry.yml;
+      git add clusters/$DOUBLEDRAGON_CLUSTER_NEW/registries/default/sealed-gcr-registry.yml;
       git commit -m "GCR registry for cluster DD-02 ns default";
       git push
 
@@ -1076,8 +1100,8 @@ Frequent issues and how to monitor.
   Or share the same common one in `apps/overlays/doubledragon`
   linked in `apps.yaml`
 
-      cp clusters/doubledragon-01/apps.yaml clusters/doubledragon-02/;
-      git add clusters/doubledragon-02/apps.yaml;
+      cp clusters/$DOUBLEDRAGON_CLUSTER/apps.yaml clusters/$DOUBLEDRAGON_CLUSTER_NEW/;
+      git add clusters/$DOUBLEDRAGON_CLUSTER_NEW/apps.yaml;
       git commit -m "Apps overlay for cluster DD-02";
       git push
 
@@ -1154,6 +1178,7 @@ Though please attribute back if possible.
 
 ### Versions
 
+* 2023-02-09 Double Dragon tweaks and env-vars
 * 2022-11-10 Double Dragon refreshed
 * 2021-07-10 Flux 2. Lemmings => Double Dragon
 * 2020-02-13 Flux 1.1, fluxcd.io annotations, and Helm 3
