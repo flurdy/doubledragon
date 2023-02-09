@@ -72,14 +72,18 @@ At the same time set the `GITHUB_USER` env-var to your github username.
 
 * Initialize an empty Double Dragon repo for your setup.
 
-      git clone git@github.com:flurdy/doubledragon.git doubledragon-fleet;
+      git clone git@github.com:flurdy/doubledragon.git;
+      mkdir doubledragon-fleet;
+      cp doubledragon/README.md doubledragon-fleet/;
+      cp doubledragon/LICENSE doubledragon-fleet/;
       cd doubledragon-fleet;
-      rm -rf .git;
       git init;
       git add README.md LICENSE;
       git commit -m "Starting our double dragon fleet";
 
-  Replace _doubledragon-fleet_ with whatever you want to call your repository
+  Replace _doubledragon-fleet_ with whatever you want to call your repository.
+
+  You may wish use the original `doubledragon` repo to compare.
 
 * Create a private github repository
 
@@ -165,7 +169,8 @@ So a Flux repo may look like this at the start:
 
 
 * `apps/base` is where you define your apps; deployments, services, etc.
-* `apps/overlays/clustername` is where you choose which apps a cluster has.
+* `apps/overlays/clustername` is where you choose which apps a cluster has,
+  and any customization specific to that cluster.
 * `cluster/clustername` with links to apps and infrastructure active in your specific cluster.
 * `infrastructure/sources` where to find images from registries, Helm repos, etc.
 
@@ -218,7 +223,7 @@ but Sealed Secrets works well for me.
 
       flux create source helm sealed-secrets-source \
         --interval=1h \
-        -- namespace=infrastructure \
+        --namespace=infrastructure \
         --url=https://bitnami-labs.github.io/sealed-secrets \
         --export > infrastructure/sources/sealed-secrets-source.yaml
 
@@ -234,7 +239,7 @@ but Sealed Secrets works well for me.
         --chart=sealed-secrets \
         --chart-version=">=1.15.0-0" \
         --crds=CreateReplace \
-        --export > infrastructure/sealed-secrets/sealed-secrets.yaml;
+        --export > infrastructure/sealed-secrets/sealed-secrets.yaml
 
 * Add to git so Flux can act on it
 
@@ -272,7 +277,7 @@ These will be very simple for now, later on they will be more elaborate and help
 
       flux create kustomization infrastructure \
         --target-namespace=infrastructure \
-        --source=infrastructure \
+        --source=flux-system \
         --path="./infrastructure" \
         --prune=true \
         --interval=10m \
@@ -320,8 +325,8 @@ e.g. a GKE cluster.
 
 * Add it to source control
 
-      git add clusters/doubledragon-01/secrets/sealed-secrets-cert.pem
-      git commit -m "Sealed Secret public key"
+      git add clusters/doubledragon-01/secrets/sealed-secrets-cert.pem;
+      git commit -m "Sealed Secret public key";
       git push
 
 ### Nginx Ingress
@@ -470,7 +475,7 @@ e.g. a GKE cluster.
 
 #### Certificate issuers
 
-Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt](https://letsencrypt.org/), so that testing in _staging does not flood the _prod_ instance.
+Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt](https://letsencrypt.org/), so that testing in _staging_ does not flood the _prod_ instance.
 
     mkdir clusters/doubledragon-01/certificate-issuers
 
@@ -576,7 +581,8 @@ Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt]
 
 * Update the certificate for your app
 
-  Change the `cluster-issuer` annotation and `sercretName` in
+  Change the `cluster-issuer` annotation and `secretName` in
+
   `apps/base/someapp/ingress.yaml`
 
       apiVersion: networking.k8s.io/v1
@@ -621,9 +627,11 @@ And some secrets to access those.
 #### GCR Google Container Registry
 
 * For example if you needed _GCR_.
-  And have followed the guide above and got a `gcr-registry.yml` file.
+  And have followed the guide above and got a `gcr-registry.yml` file (or `.yaml`),
 
-* Make sure the raw secrets do not get added to git
+  and maybe the `gcp-service-account.json` source as well.
+
+* Make sure the raw secrets do not get added to *git* by accident
 
       echo gcp-service-account.json >> .gitignore;
       echo gcr-registry.yml >> .gitignore;
@@ -635,22 +643,30 @@ And some secrets to access those.
       kubeseal --format=yaml --namespace=apps \
       --cert=clusters/doubledragon-01/secrets/sealed-secrets-cert.pem \
       < gcr-registry.yml \
-      > clusters/doubledragon-01/registries/apps/sealed-gcr-registry.yml;
+      > clusters/doubledragon-01/registries/apps/sealed-gcr-registry.yaml;
 
       mkdir -p clusters/doubledragon-01/registries/infrastructure;
       kubeseal --format=yaml --namespace=infrastructure \
       --cert=clusters/doubledragon-01/secrets/sealed-secrets-cert.pem \
       < gcr-registry.yml \
-      > clusters/doubledragon-01/registries/infrastructure/sealed-gcr-registry.yml
+      > clusters/doubledragon-01/registries/infrastructure/sealed-gcr-registry.yaml
 
 * Add the secrets to Flux
 
-      git add clusters/doubledragon-01/registries/apps/sealed-gcr-registry.yml;
-      git add clusters/doubledragon-01/registries/infrastructure/sealed-gcr-registry.yml;
+      git add clusters/doubledragon-01/registries/apps/sealed-gcr-registry.yaml;
+      git add clusters/doubledragon-01/registries/infrastructure/sealed-gcr-registry.yaml;
       git commit -m "GCR registry";
       git push
 
    You may later need more for other and future namespaces, e.g. `default` and `flux-system`
+
+* Remove `gcr-registry.yml` (and `gcp-service-account.json`)
+
+  Later on when you have tested the registry by confirming that the cluster can download actual deployment images for your apps,
+  you should delete the unencrypted registry files
+
+      rm gcr-registry.yaml gcp-service-account.json
+
 
 * Lets set up repo image scanning
 
