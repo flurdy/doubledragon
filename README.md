@@ -30,7 +30,7 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
 1. [Pre requisites](#contributors)
 1. [Double Dragon install](#double-dragon-install)
    1. [Clone repository](#forkclone-repository)
-   1. [Cluster environment variables](#handy-cluster-environment-variables)
+   1. [Cluster environment variables](#cluster-environment-variables)
    1. [Install Flux CLI](#install-flux-cli)
    1. [Bootstrap Flux](#bootstrap-flux-on-your-cluster)
    1. [File structure](#file-structure)
@@ -751,7 +751,42 @@ And some secrets to access those.
 
 Lets create a Hello World app.
 
-* First lets create a _base layer_
+* First you should revisit the [Container registries](#container-registries) section,
+  and add an _"Image Repository"_ for the _Hello_ app.
+  So that the _deployment_ below can scan and find the _Docker_ image it requires
+
+      flux create image repository hello-source \
+      --image=nginxdemos/hello \
+      --interval=5m \
+      --namespace=infrastructure \
+      --export > infrastructure/sources/hello-source.yaml
+
+* And a _Image Policy_
+
+      flux create image policy hello-policy \
+      --image-ref=hello-source \
+      --select-semver=0.3.x \
+      --export > ./infrastructure/sources/hello-policy.yaml
+
+* Append to the  _Kustomization_ at `infrastructure/sources/kustomization.yaml`
+
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      resources:
+        - sealed-secrets-source.yaml
+        - ingress-nginx-source.yaml
+        - hello-source.yaml
+        - hello-policy.yaml
+
+* And add the image repository to the repo
+
+      git add infrastructure/sources/hello-source.yaml;
+      git add infrastructure/sources/hello-policy.yaml;
+      git add infrastructure/sources/kustomization.yaml;
+      git commit -m "Hello image repository files"
+      git push
+
+* Then lets create a _base layer_
 
       mkdir -p apps/base/hello;
 
@@ -789,6 +824,8 @@ and change the app labels to just `hello`
 
   For the _Hello_ deployment this is sufficent,
   but for more normal workflows you should most likely add more e.g. resource limits, env-vars, secrets etc.
+
+  E.g.:
 
       spec:
         containers:
@@ -857,7 +894,7 @@ and change the app labels to just `hello`
 
 ### Hello app overlay
 
-     mkdir -p apps/overlays/doubledragon/hello;
+     mkdir -p apps/overlays/$DOUBLEDRAGON_NAME/hello;
 
   Edit `apps/overlays/$DOUBLEDRAGON_NAME/hello/kustomization.yaml`
 
@@ -901,6 +938,12 @@ and change the app labels to just `hello`
         --prune=true \
         --interval=10m \
         --export > clusters/$DOUBLEDRAGON_CLUSTER/apps.yaml
+
+* Add update the repo
+
+      git add clusters/$DOUBLEDRAGON_CLUSTER/apps.yaml;
+      git commit -m "Adding apps to the cluster";
+      git push
 ### Test application
 
 * Find the ingress controller's `External IP`
