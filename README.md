@@ -40,6 +40,7 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
    1. [Cert Manager](#cert-manager)
    1. [Container registries](#container-registries)
 1. [Your first application](#your-first-application)
+1. [Advise: Don't touch](#advise-dont-touch)
 1. [Troubleshooting](#troubleshooting)
 1. [Add another cluster](#add-another-cluster)
 1. [More information](#more-information-alternatives-suggestions)
@@ -775,6 +776,7 @@ Lets create a Hello World app.
       resources:
         - sealed-secrets-source.yaml
         - ingress-nginx-source.yaml
+        - jetstack-source.yaml
         - hello-source.yaml
         - hello-policy.yaml
 
@@ -783,12 +785,13 @@ Lets create a Hello World app.
       git add infrastructure/sources/hello-source.yaml;
       git add infrastructure/sources/hello-policy.yaml;
       git add infrastructure/sources/kustomization.yaml;
-      git commit -m "Hello image repository files"
-      git push
+      git commit -m "Hello image repository files";
+      git push;
+      kube get imagerepository -A --watch
 
 * Then lets create a _base layer_
 
-      mkdir -p apps/base/hello;
+      mkdir -p apps/base/hello
 
 * And an initial deployment yaml for an _Hello_ app
 
@@ -894,9 +897,9 @@ and change the app labels to just `hello`
 
 ### Hello app overlay
 
-     mkdir -p apps/overlays/$DOUBLEDRAGON_NAME/hello;
+     mkdir -p apps/overlays/$DOUBLEDRAGON_NAME/hello
 
-  Edit `apps/overlays/$DOUBLEDRAGON_NAME/hello/kustomization.yaml`
+* Edit `apps/overlays/$DOUBLEDRAGON_NAME/hello/kustomization.yaml`
 
   In more complicated apps this may have some overrides but for now very simple.
 
@@ -907,7 +910,7 @@ and change the app labels to just `hello`
         - ../../../base/hello
 
 
-  Edit `apps/overlays/$DOUBLEDRAGON_NAME/kustomization.yaml`
+* Edit `apps/overlays/$DOUBLEDRAGON_NAME/kustomization.yaml`
 
       apiVersion: kustomize.config.k8s.io/v1beta1
       kind: Kustomization
@@ -923,7 +926,7 @@ and change the app labels to just `hello`
       git add apps/base/hello/kustomization.yaml;
       git add apps/overlays/$DOUBLEDRAGON_NAME/hello/kustomization.yaml;
       git add apps/overlays/$DOUBLEDRAGON_NAME/kustomization.yaml;
-      git commit -m "Hello app files"
+      git commit -m "Hello app files";
       git push
 
 ### Add Hello app to cluster
@@ -932,7 +935,7 @@ and change the app labels to just `hello`
 
       flux create kustomization apps \
         --target-namespace=apps \
-        --source=infrastructure \
+        --source=flux-system \
         --path="./apps/overlays/$DOUBLEDRAGON_NAME" \
         --depends-on=infrastructure \
         --prune=true \
@@ -948,7 +951,7 @@ and change the app labels to just `hello`
 
 * Find the ingress controller's `External IP`
 
-      kubectl get services ingress-nginx-controller
+      kubectl get services -n apps ingress-nginx-controller
 
 * Use `curl` to resolve the URL. Replace `11.22.33.44` with the external IP,
   and `lynx` to view it
@@ -963,8 +966,9 @@ and change the app labels to just `hello`
 ### Update application
 
 * Updating the Docker image in the Docker registry should trigger a rollout to the cluster.
-   * If you have set up the _source_ to poll that registry repo.
+   * If you have set up the _source_ to poll that image registry repo.
 * Update any settings in the e.g. `deployment.yaml`, commit and push, Flux will pick it up and roll out the changes.
+* Though in this instance as _Hello__ is a fairly static public Docker image, it rarely changes
 
 ### Delete application
 
@@ -983,6 +987,7 @@ and change the app labels to just `hello`
 1. Add source if in a private repo. And add/append to source _kustomization_.
 
    * `infrastructure/sources/someapp-source.yaml`
+   * `infrastructure/sources/someapp-policy.yaml`
    * `infrastructure/sources/kustomization.yaml`
    * `infrastructure/kustomization.yaml`
 
@@ -998,7 +1003,8 @@ and change the app labels to just `hello`
    * `apps/base/kustomization.yaml`
    * `apps/overlay/somecluster/someapp/kustomization.yaml`
    * `apps/overlay/somecluster/kustomization.yaml`
-   * `apps/overlay/kustomization.yaml`
+
+   (Some of the _Kustomization_ files can be short-cutted if they do nothing but redirect)
 
 ## Advise: Don't touch
 
@@ -1021,7 +1027,7 @@ and change the app labels to just `hello`
 
 Frequent issues and how to monitor.
 
-### Tail the logs
+### 1 Tail the logs
 
 * _Flux_ logs
 
@@ -1031,7 +1037,7 @@ Frequent issues and how to monitor.
 
       kubectl logs podname -f
 
-### Watch statuses
+### 2 Watch statuses
 
 * _Flux_ kustomization status
 
@@ -1045,7 +1051,7 @@ Frequent issues and how to monitor.
 
       kubectl get deploy -A --watch
 
-### Known possible issues
+### 3 Known possible issues
 
 * Nginx: `x509 certificate is not valid`
 
@@ -1057,6 +1063,24 @@ Frequent issues and how to monitor.
   * Wait until _Flux_ has removed them from the cluster.
   * Uncomment and add them back in.
   * Note this may change the external IP assigned to the cluster's load balancer.
+
+
+### 4 Remove and add
+
+* Fixed typos, and nothing changes?
+
+  Sometimes some resources gets added with a typo,
+  but you fixed it and pushed the change to the repo,
+  yet _Flux_ or _Kubernetes_ do not pick up the change?
+
+  Most of the time _Flux_ and _Kubernetes_ notices and changes the resources. But sometimes not.
+
+* Force the change.
+
+  Simply remove the resource, push to git, let the system catch up, add it back with the typo corrected, and the change gets picked up
+
+  Most of the time the _"removal"_ can be done by commenting out the reference to it in a `kustomization.yaml` file.
+  Instead of actual removing actual _deployment_ etc git files and history.
 
 ## Add another cluster
 
