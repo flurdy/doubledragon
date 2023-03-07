@@ -149,6 +149,7 @@ At the same time set the `GITHUB_USER` env-var to your github username.
       --repository=$DOUBLEDRAGON_REPO \
       --branch=main \
       --path=./clusters/$DOUBLEDRAGON_CLUSTER \
+      --read-write-key \
       --personal
 
 * This assumes the repo is called _doubledragon-fleet_ (`$DOUBLEDRAGON_REPO`) (it will create it if it does not exist).
@@ -723,6 +724,7 @@ And some secrets to access those.
 
         flux create image policy someapp-policy \
         --image-ref=someapp-source \
+        --namespace=infrastructure \
         --select-semver=5.0.x \
         --export > ./infrastructure/sources/someapp-policy.yaml
 
@@ -766,6 +768,7 @@ Lets create a Hello World app.
 
       flux create image policy hello-policy \
       --image-ref=hello-source \
+      --namespace=infrastructure \
       --select-semver=0.3.x \
       --export > ./infrastructure/sources/hello-policy.yaml
 
@@ -1080,7 +1083,7 @@ Frequent issues and how to monitor.
   Simply remove the resource, push to git, let the system catch up, add it back with the typo corrected, and the change gets picked up
 
   Most of the time the _"removal"_ can be done by commenting out the reference to it in a `kustomization.yaml` file.
-  Instead of actual removing actual _deployment_ etc git files and history.
+  Instead of removing actual _deployment_ etc git files and history.
 
 ## Add another cluster
 
