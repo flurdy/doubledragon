@@ -118,7 +118,7 @@ At the same time set the `GITHUB_USER` env-var to your github username.
 
 ### Cluster environment variables
 
-* Lets add the cluster names and others as environment variables so that most commands in this howto can be copy-pasted directly
+* Lets temporarily add the repo and cluster name as environment variables so that most commands in this howto can be copy-pasted directly
 
        # In Bash:
        export DOUBLEDRAGON_REPO=doubledragon-fleet;
@@ -130,7 +130,7 @@ At the same time set the `GITHUB_USER` env-var to your github username.
        set -x DOUBLEDRAGON_NAME doubledragon;
        set -x DOUBLEDRAGON_CLUSTER doubledragon-01
 
-  Replace with whatever you decide to call your repository and cluster
+  Replace _doubledragon-fleet, doubledragon, doubledragon-01_ with whatever you decide to call your repository and cluster
 
 ### Install Flux CLI
 
@@ -152,9 +152,8 @@ At the same time set the `GITHUB_USER` env-var to your github username.
       --read-write-key \
       --personal
 
-* This assumes the repo is called _doubledragon-fleet_ (`$DOUBLEDRAGON_REPO`) (it will create it if it does not exist).
-   And names your initial cluster as _doubledragon-01_ (`$DOUBLEDRAGON_CLUSTER`).
-   Change as appropriate
+* This will create a github repo set in `$DOUBLEDRAGON_REPO` if it does not already exist.
+   And names your initial cluster as set in `$DOUBLEDRAGON_CLUSTER`.
 
 * Update your local repo with the _origin_ changes
 
@@ -518,10 +517,10 @@ Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt]
 
 * Add to _flux_ and watch till active
 
-      git add clusters/doubledragon-01/certificate-issuers/letsencrypt-issuer-staging.yaml;
+      git add clusters/$DOUBLEDRAGON_CLUSTER/certificate-issuers/letsencrypt-issuer-staging.yaml;
       git commit -m "Staging issuer";
       git push;
-      kube get clusterissuer -A --watch
+      kubectl get clusterissuer -A --watch
 
 * Secure an app
 
@@ -562,7 +561,7 @@ Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt]
       git add apps/base/someapp/ingress.yaml;
       git commit -m "Secured someapp";
       git push;
-      kube get ingress -n apps --watch
+      kubectl get ingress -n apps --watch
 
   Soon the `someapp.example.com` line will show 443 as available port. It all ok.
 
@@ -593,7 +592,7 @@ Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt]
       git add clusters/$DOUBLEDRAGON_CLUSTER/certificate-issuers/letsencrypt-issuer-prod.yaml;
       git commit -m "Prod issuer";
       git push;
-      kube get clusterissuer -A --watch
+      kubectl get clusterissuer -A --watch
 
 * Update the certificate for your app
 
@@ -630,7 +629,7 @@ Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt]
       git add apps/base/someapp/ingress.yaml;
       git commit -m "Secured someapp with prod cert";
       git push;
-      kube describe ingress someapp-ingress -n apps --watch
+      kubectl describe ingress someapp-ingress -n apps --watch
 ### Container Registries
 
 To access private Docker container image repositories
@@ -656,12 +655,17 @@ And some secrets to access those.
 * Seal the secrets
 
       mkdir -p clusters/$DOUBLEDRAGON_CLUSTER/registries/apps;
+      mkdir -p clusters/$DOUBLEDRAGON_CLUSTER/registries/infrastructure
+
+  A registry secret for both apps
+
       kubeseal --format=yaml --namespace=apps \
       --cert=clusters/$DOUBLEDRAGON_CLUSTER/secrets/sealed-secrets-cert.pem \
       < gcr-registry.yml \
-      > clusters/$DOUBLEDRAGON_CLUSTER/registries/apps/sealed-gcr-registry.yaml;
+      > clusters/$DOUBLEDRAGON_CLUSTER/registries/apps/sealed-gcr-registry.yaml
 
-      mkdir -p clusters/$DOUBLEDRAGON_CLUSTER/registries/infrastructure;
+   and infrastructure namespace
+
       kubeseal --format=yaml --namespace=infrastructure \
       --cert=clusters/$DOUBLEDRAGON_CLUSTER/secrets/sealed-secrets-cert.pem \
       < gcr-registry.yml \
@@ -681,7 +685,7 @@ And some secrets to access those.
   Later on when you have tested the registry by confirming that the cluster can download actual deployment images for your apps,
   you should delete the unencrypted registry files
 
-      rm gcr-registry.yaml gcp-service-account.json
+      rm gcr-registry.yml gcp-service-account.json
 
 
 * Lets set up repo image scanning
@@ -790,7 +794,7 @@ Lets create a Hello World app.
       git add infrastructure/sources/kustomization.yaml;
       git commit -m "Hello image repository files";
       git push;
-      kube get imagerepository -A --watch
+      kubectl get imagerepository -A --watch
 
 * Then lets create a _base layer_
 
@@ -1141,7 +1145,7 @@ Frequent issues and how to monitor.
 
 * Download the _Sealed Secrets_ public key for this cluster
 
-      mkdir -p /clusters/doubledragon-02/secrets;
+      mkdir -p /clusters/$DOUBLEDRAGON_CLUSTER_NEW/secrets;
 
       kubeseal --fetch-cert \
       --controller-name=sealed-secrets-controller \
