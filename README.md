@@ -1107,29 +1107,39 @@ Frequent issues and how to monitor.
 
 * Set as the current kubernetes context
 
-
-* Add another cluster folder e.g. `clusters/doubledragon-02`
-
-      mkdir -p clusters/doubledragon-02;
-
-* Maybe export a new env-var
+* Maybe export a new env-var (and old ones if no longer set)
 
        # In Bash:
+       export DOUBLEDRAGON_CLUSTER=doubledragon-01;
        export DOUBLEDRAGON_CLUSTER_NEW=doubledragon-02
 
        # In Fish:
+       set -x DOUBLEDRAGON_CLUSTER doubledragon-01;
        set -x DOUBLEDRAGON_CLUSTER_NEW doubledragon-02
 
 * Bootstrap the new cluster with `doubledragon-02` or `$DOUBLEDRAGON_CLUSTER_NEW` as the name
 
       flux bootstrap github \
+        --components-extra=image-reflector-controller,image-automation-controller \
         --owner=$GITHUB_USER \
         --repository=DOUBLEDRAGON_REPO \
         --branch=main \
         --path=./clusters/$DOUBLEDRAGON_CLUSTER_NEW \
+        --read-write-key \
         --personal
 
+   After a while pull the changes
+
+      git pull
+
 ### Copy and re-initialise infrastructure
+
+* Add namespaces to the new cluster
+
+      cp clusters/$DOUBLEDRAGON_CLUSTER/namespaces.yaml clusters/$DOUBLEDRAGON_CLUSTER_NEW/;
+      git add clusters/$DOUBLEDRAGON_CLUSTER_NEW/namespaces.yaml;
+      git commit -m "Double Dragon II namespaces";
+      git push
 
 * Copy the `infrastructure.yaml` kustomization to the new cluster
 
@@ -1145,7 +1155,7 @@ Frequent issues and how to monitor.
 
 * Download the _Sealed Secrets_ public key for this cluster
 
-      mkdir -p /clusters/$DOUBLEDRAGON_CLUSTER_NEW/secrets;
+      mkdir -p clusters/$DOUBLEDRAGON_CLUSTER_NEW/secrets;
 
       kubeseal --fetch-cert \
       --controller-name=sealed-secrets-controller \
@@ -1156,15 +1166,22 @@ Frequent issues and how to monitor.
 
   E.g.
 
-      mkdir -p clusters/$FLUX_CLUSTER_NEW/registries/default;
+      mkdir -p clusters/$FLUX_CLUSTER_NEW/registries/apps;
+      mkdir -p clusters/$FLUX_CLUSTER_NEW/registries/infrastructure;
 
       kubeseal --format=yaml --namespace=apps \
        --cert=clusters/$DOUBLEDRAGON_CLUSTER_NEW/secrets/sealed-secrets-cert.pem \
        < gcr-registry.yml \
-       > clusters/$DOUBLEDRAGON_CLUSTER_NEW/registries/default/sealed-gcr-registry.yml;
+       > clusters/$DOUBLEDRAGON_CLUSTER_NEW/registries/apps/sealed-gcr-registry.yml;
 
-      git add clusters/$DOUBLEDRAGON_CLUSTER_NEW/registries/default/sealed-gcr-registry.yml;
-      git commit -m "GCR registry for cluster DD-02 ns default";
+      kubeseal --format=yaml --namespace=infrastructure \
+       --cert=clusters/$DOUBLEDRAGON_CLUSTER_NEW/secrets/sealed-secrets-cert.pem \
+       < gcr-registry.yml \
+       > clusters/$DOUBLEDRAGON_CLUSTER_NEW/registries/infrastructure/sealed-gcr-registry.yml;
+
+      git add clusters/$DOUBLEDRAGON_CLUSTER_NEW/registries/apps/sealed-gcr-registry.yml;
+      git add clusters/$DOUBLEDRAGON_CLUSTER_NEW/registries/infrastructure/sealed-gcr-registry.yml;
+      git commit -m "GCR registry for cluster DD-02 ns";
       git push
 
 ### Copy/tweak apps overlay
