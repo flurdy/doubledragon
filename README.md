@@ -1122,7 +1122,7 @@ Frequent issues and how to monitor.
       flux bootstrap github \
         --components-extra=image-reflector-controller,image-automation-controller \
         --owner=$GITHUB_USER \
-        --repository=DOUBLEDRAGON_REPO \
+        --repository=$DOUBLEDRAGON_REPO \
         --branch=main \
         --path=./clusters/$DOUBLEDRAGON_CLUSTER_NEW \
         --read-write-key \
@@ -1160,14 +1160,18 @@ Frequent issues and how to monitor.
       kubeseal --fetch-cert \
       --controller-name=sealed-secrets-controller \
       --controller-namespace=infrastructure \
-      > clusters/$DOUBLEDRAGON_CLUSTER_NEW/secrets/sealed-secrets-cert.pem
+      > clusters/$DOUBLEDRAGON_CLUSTER_NEW/secrets/sealed-secrets-cert.pem;
+
+      git add clusters/$DOUBLEDRAGON_CLUSTER_NEW/secrets/sealed-secrets-cert.pem;
+      git commit -m "Sealed Secret public key";
+      git push
 
 * Re-encrypt secrets such as the GCR registry secret if needed
 
   E.g.
 
-      mkdir -p clusters/$FLUX_CLUSTER_NEW/registries/apps;
-      mkdir -p clusters/$FLUX_CLUSTER_NEW/registries/infrastructure;
+      mkdir -p clusters/$DOUBLEDRAGON_CLUSTER_NEW/registries/apps;
+      mkdir -p clusters/$DOUBLEDRAGON_CLUSTER_NEW/registries/infrastructure;
 
       kubeseal --format=yaml --namespace=apps \
        --cert=clusters/$DOUBLEDRAGON_CLUSTER_NEW/secrets/sealed-secrets-cert.pem \
@@ -1182,6 +1186,18 @@ Frequent issues and how to monitor.
       git add clusters/$DOUBLEDRAGON_CLUSTER_NEW/registries/apps/sealed-gcr-registry.yml;
       git add clusters/$DOUBLEDRAGON_CLUSTER_NEW/registries/infrastructure/sealed-gcr-registry.yml;
       git commit -m "GCR registry for cluster DD-02 ns";
+      git push
+
+### Copy/tweak over other cluster specifics
+
+* Such as *certificate-manager* issuers
+
+      mkdir -p clusters/$DOUBLEDRAGON_CLUSTER_NEW/certificate-issuers;
+      cp clusters/$DOUBLEDRAGON_CLUSTER/certificate-issuers/* \
+         clusters/$DOUBLEDRAGON_CLUSTER_NEW/certificate-issuers/;
+
+      git add clusters/$DOUBLEDRAGON_CLUSTER_NEW/certificate-issuers/*;
+      git commit -m "Staging and Prod issuer";
       git push
 
 ### Copy/tweak apps overlay
