@@ -1093,6 +1093,23 @@ Here is how to update on every new [semver](https://semver.org/) tag:
   However `0.4.0` will not get uploaded. Nor would `1.0.0`.
   For that the `--select-semver` would have to be `0.x` or just `x` I think
 
+* Add source namespace to the policy
+
+  The CLI does not have that option so please change the policy:
+
+      ---
+      apiVersion: image.toolkit.fluxcd.io/v1beta1
+      kind: ImagePolicy
+      metadata:
+        name: myfirstapp-policy
+        namespace: apps
+      spec:
+        imageRepositoryRef:
+          name: myfirstapp-source
+          namespace: infrastructure
+        policy:
+          semver:
+            range: 0.3.x
 
 
 * Append this policy to the _Kustomization_ of the app `apps/base/myfirstapp/kustomization.yaml`
@@ -1110,10 +1127,11 @@ Here is how to update on every new [semver](https://semver.org/) tag:
   Edit `apps/base/myfirstapp/deployment.yaml`
   and modify the `image` line by appending the policy name
 
+      ...
       spec:
         containers:
-          - image: gcr.io/something:0.3.2  # {"$imagepolicy": "apps:myfirstapp-policy "}
-            name: myfirstapp-container
+          - image: gcr.io/something:0.3.1 # {"$imagepolicy": "apps:myfirstapp-policy "}
+            ...
 
   This seems a bit hacky but this is how it works
 
@@ -1302,7 +1320,7 @@ The nuclear option. But sometimes neccessary.
 
 Though usually I just spin up another cluster instead.
 
-Note, any encrypted secrets will have to be re-sealed when re-installing _flux_
+Note, any encrypted secrets will have to be re-sealed when re-installing _flux_ with the new certificate
 
 ## Add another cluster
 
