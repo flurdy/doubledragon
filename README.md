@@ -39,13 +39,15 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
    1. [Nginx Ingress](#nginx-ingress)
    1. [Cert Manager](#cert-manager)
    1. [Container registries](#container-registries)
-1. [Hello world application](#hello-world-application)
-1. [Your first application](#your-first-application)
-1. [Automatic image updates](#automatic-image-updates)
-1. [Advise: Don't touch](#advise-dont-touch)
-1. [Troubleshooting](#troubleshooting)
-1. [Add another cluster](#add-another-cluster)
-1. [More information](#more-information-alternatives-suggestions)
+1. [Applications](#applications)
+   1. [Hello world application](#hello-world-application)
+   1. [Your first application](#your-first-application)
+   1. [Automatic image updates](#automatic-image-updates)
+1. [Further information](#further-information)
+   1. [Advise: Don't touch](#advise-dont-touch)
+   1. [Troubleshooting](#troubleshooting)
+   1. [Add another cluster](#add-another-cluster)
+   1. [Providers and tools](#providers-tools)
    1. [License](#license)
 
 ## Pre requisites
@@ -72,6 +74,7 @@ At the same time set the `GITHUB_USER` env-var to your github username.
 
 ## Double Dragon install
 
+---
 ### Fork/Clone repository
 
 * Initialize an empty Double Dragon repo for your setup.
@@ -100,11 +103,13 @@ At the same time set the `GITHUB_USER` env-var to your github username.
 
   Note, the CLI for some reason does not like if Github PAT env-var is set so you may have to temporarily unset when using it.
 
-       # In Bash:
-       unset GITHUB_TOKEN
+   In Bash:
 
-       # In Fish:
-       set -e GITHUB_TOKEN
+      unset GITHUB_TOKEN
+
+   In Fish:
+
+      set -e GITHUB_TOKEN
 
   Make sure you set the `GITHUB_TOKEN` env-var again afterwards.
 
@@ -122,15 +127,17 @@ At the same time set the `GITHUB_USER` env-var to your github username.
 
 * Lets temporarily add the repo and cluster name as environment variables so that most commands in this howto can be copy-pasted directly
 
-       # In Bash:
-       export DOUBLEDRAGON_REPO=doubledragon-fleet;
-       export DOUBLEDRAGON_NAME=doubledragon;
-       export DOUBLEDRAGON_CLUSTER=doubledragon-01
+  In Bash:
 
-       # In Fish:
-       set -x DOUBLEDRAGON_REPO doubledragon-fleet;
-       set -x DOUBLEDRAGON_NAME doubledragon;
-       set -x DOUBLEDRAGON_CLUSTER doubledragon-01
+      export DOUBLEDRAGON_REPO=doubledragon-fleet;
+      export DOUBLEDRAGON_NAME=doubledragon;
+      export DOUBLEDRAGON_CLUSTER=doubledragon-01
+
+  In Fish:
+
+      set -x DOUBLEDRAGON_REPO doubledragon-fleet;
+      set -x DOUBLEDRAGON_NAME doubledragon;
+      set -x DOUBLEDRAGON_CLUSTER doubledragon-01
 
   Replace _doubledragon-fleet, doubledragon, doubledragon-01_ with whatever you decide to call your repository and cluster
 
@@ -494,7 +501,7 @@ e.g. a GKE cluster.
 
 Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt](https://letsencrypt.org/), so that testing in _staging_ does not flood the _prod_ instance.
 
-    mkdir clusters/$DOUBLEDRAGON_CLUSTER/certificate-issuers
+    mkdir -p clusters/$DOUBLEDRAGON_CLUSTER/certificate-issuers
 
 * Create and edit the staging issuer at
 
@@ -528,7 +535,7 @@ Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt]
 
   I.e. add a TLS certificate to an ingress.
 
-  This step may have to wait until you add your own apps later on in the tutorial.
+  These steps may have to wait until you add your own apps later on in the tutorial.
 
 * Edit your app's _ingress_ `apps/base/someapp/ingress.yaml`
 
@@ -643,10 +650,10 @@ And some secrets to access those.
 
 #### GCR Google Container Registry
 
-* For example if you needed _GCR_.
-  And have followed the guide above and got a `gcr-registry.yml` file (or `.yaml`),
+* For example if you needed [GCR](https://cloud.google.com/container-registry/),
+  and have followed the guide above and got a `gcr-registry.yml` file (or `.yaml`),
 
-  and maybe the `gcp-service-account.json` source as well.
+  and maybe the initial `gcp-service-account.json` source as well.
 
 * Make sure the raw secrets do not get added to *git* by accident
 
@@ -659,14 +666,14 @@ And some secrets to access those.
       mkdir -p clusters/$DOUBLEDRAGON_CLUSTER/registries/apps;
       mkdir -p clusters/$DOUBLEDRAGON_CLUSTER/registries/infrastructure
 
-  A registry secret for both apps
+  A registry secret for both the apps namespace
 
       kubeseal --format=yaml --namespace=apps \
       --cert=clusters/$DOUBLEDRAGON_CLUSTER/secrets/sealed-secrets-cert.pem \
       < gcr-registry.yml \
       > clusters/$DOUBLEDRAGON_CLUSTER/registries/apps/sealed-gcr-registry.yaml
 
-   and infrastructure namespace
+   and the infrastructure namespace
 
       kubeseal --format=yaml --namespace=infrastructure \
       --cert=clusters/$DOUBLEDRAGON_CLUSTER/secrets/sealed-secrets-cert.pem \
@@ -715,38 +722,21 @@ And some secrets to access those.
         accessFrom:
           namespaceSelectors:
             - matchLabels:
-                kubernetes.io/metadata.name: flux-system,apps
+                kubernetes.io/metadata.name: apps
 
     Note, indentation is under `spec`.
-
-    You can add other namespaces as a comma-separated list.
-
-  * You can also be specific about the version policy.
-
-    You can configure it to only scan for [semver](https://semver.org) versions.
-    Or build number. Or other.
-
-    For example, a _semver_ policy:
-
-        flux create image policy someapp-policy \
-        --image-ref=someapp-source \
-        --namespace=infrastructure \
-        --select-semver=5.0.x \
-        --export > ./infrastructure/sources/someapp-policy.yaml
 
 * Note, for _GCR_ there is the alternative option of a more secure short-lived _acccess token_ instead.
 
   This can be done with Flux. [You need to set up a cronjob to refresh it](https://fluxcd.io/flux/guides/cron-job-image-auth/).
 
-* Add these to `sources/kustomization.yaml`
+* Add these to `infrastructure/sources/kustomization.yaml`
 
       apiVersion: kustomize.config.k8s.io/v1beta1
       kind: Kustomization
       resources:
-      - sealed-secrets-source.yaml
-      - ingress-nginx-source.yaml
+      ...
       - someapp-source.yaml
-      - someapp-policy.yaml
 
 * Add to git/flux
 
@@ -756,6 +746,9 @@ And some secrets to access those.
       git commit -m "Sources for someapp"
       git push
 
+## Applications
+
+---
 ## Hello world application
 
 Lets create a Hello World app.
@@ -1029,10 +1022,18 @@ These will be very similar to the _Hello_ app.
   So that the _deployment_ below can scan and find the _Docker_ image it requires
 
       flux create image repository myfirstapp-source \
-      --image=gcr.io/somethingsomething \
-      --interval=5m \
-      --namespace=infrastructure \
-      --export > infrastructure/sources/myfirstapp-source.yaml
+        --image=gcr.io/somethingsomething \
+        --interval=5m \
+        --namespace=infrastructure \
+        --export > infrastructure/sources/myfirstapp-source.yaml
+
+* Append this to the YAML in infrastructure/sources/myfirstapp-source.yaml:
+
+      ...
+      accessFrom:
+        namespaceSelectors:
+          - matchLabels:
+              kubernetes.io/metadata.name: apps
 
 * Append this source to the _Kustomization_ at `infrastructure/sources/kustomization.yaml`
 
@@ -1074,7 +1075,7 @@ Here is how to update on every new [semver](https://semver.org/) tag:
 
 * Image repository
 
-  As shown above in the [Your first application](#your-first-application) section, you need an _image repository_ for your application
+  As shown above in the [Your first application](#your-first-application) section, you need an _image repository_ source(s) for your application images
 
 * Image policies
 
@@ -1095,7 +1096,7 @@ Here is how to update on every new [semver](https://semver.org/) tag:
 
 * Add source namespace to the policy
 
-  The CLI does not have that option so please change the policy:
+  The CLI does not have that option so please change the policy to refer to the "infrastructure" namespace:
 
       ---
       apiVersion: image.toolkit.fluxcd.io/v1beta1
@@ -1216,6 +1217,9 @@ Here is how to update on every new [semver](https://semver.org/) tag:
 
    (Some of the _Kustomization_ files can be short-cutted if they do nothing but redirect)
 
+## Further information
+
+---
 ## Advise: Don't touch
 
 * Once Flux is running, by convention avoid using `kubectl create|apply` etc.
@@ -1262,6 +1266,8 @@ Frequent issues and how to monitor.
       kubectl get deploy -A --watch
 
 ### 3 Known possible issues
+
+* Certain operation takes a few minutes, e.g. pod creation, waiting on Flux scan polling
 
 * Nginx: `x509 certificate is not valid`
 
@@ -1342,12 +1348,14 @@ Note, any encrypted secrets will have to be re-sealed when re-installing _flux_ 
 
 * Maybe export a new env-var (and old ones if no longer set)
 
-       # In Bash:
+  In Bash:
+
        export DOUBLEDRAGON_REPO=doubledragon-fleet;
        export DOUBLEDRAGON_CLUSTER=doubledragon-01;
        export DOUBLEDRAGON_CLUSTER_NEW=doubledragon-02
 
-       # In Fish:
+  In Fish:
+
        set -x DOUBLEDRAGON_REPO doubledragon-fleet;
        set -x DOUBLEDRAGON_CLUSTER doubledragon-01;
        set -x DOUBLEDRAGON_CLUSTER_NEW doubledragon-02
@@ -1451,7 +1459,7 @@ Note, any encrypted secrets will have to be re-sealed when re-installing _flux_ 
 
 * Note, the exposed load balancer external IP will be different.
 
-## More information, alternatives, suggestions
+## Providers and tools
 
 ### Kubernetes as a Service
 
@@ -1480,34 +1488,31 @@ Note, any encrypted secrets will have to be re-sealed when re-installing _flux_ 
 
         brew install azure-cli
 
-* Tools
+### Tools
 
-  * [github.com/ahmetb/kubectx](https://github.com/ahmetb/kubectx)
+* [github.com/ahmetb/kubectx](https://github.com/ahmetb/kubectx)
 
-        brew install kubectx
+      brew install kubectx
 
-   * [github.com/vmware-tanzu/octant](https://github.com/vmware-tanzu/octant)
+* [github.com/vmware-tanzu/octant](https://github.com/vmware-tanzu/octant)
 
-         brew install octant
+      brew install octant
 
-   * [k9ss.io](https://k9ss.io)
+* [k9ss.io](https://k9ss.io)
 
-         brew install derailed/k9s/k9s
+      brew install derailed/k9s/k9s
 
-   * [keel.sh](https://keel.sh)
+* [keel.sh](https://keel.sh)
 
 
-   * [github.com/stern/stern](https://github.com/stern/stern)
+* [github.com/stern/stern](https://github.com/stern/stern)
 
-         brew install stern
+      brew install stern
 
 * [flurdy.com/docs/kubernetes/registry/kubernetes-docker-registry.html](https://flurdy.com/docs/kubernetes/registry/kubernetes-docker-registry.html)
 * [ramitsurana.github.io/awesome-kubernetes/](https://ramitsurana.github.io/awesome-kubernetes/)
 
-### Notes:
-
-* Certain operation takes a few minutes, e.g. pod creation, waiting on Flux scan polling.
-* Client tools are also available on Linux, Windows and more.
+Client tools are also available on Linux, Windows and more.
 
 ### License
 
