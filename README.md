@@ -39,7 +39,9 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
    1. [Nginx Ingress](#nginx-ingress)
    1. [Cert Manager](#cert-manager)
    1. [Container registries](#container-registries)
+1. [Hello world application](#hello-world-application)
 1. [Your first application](#your-first-application)
+1. [Automatic image updates](#automatic-image-updates)
 1. [Advise: Don't touch](#advise-dont-touch)
 1. [Troubleshooting](#troubleshooting)
 1. [Add another cluster](#add-another-cluster)
@@ -754,49 +756,13 @@ And some secrets to access those.
       git commit -m "Sources for someapp"
       git push
 
-## Your first application
+## Hello world application
 
 Lets create a Hello World app.
 
-* First you should revisit the [Container registries](#container-registries) section,
-  and add an _"Image Repository"_ for the _Hello_ app.
-  So that the _deployment_ below can scan and find the _Docker_ image it requires
+### Base layer
 
-      flux create image repository hello-source \
-      --image=nginxdemos/hello \
-      --interval=5m \
-      --namespace=infrastructure \
-      --export > infrastructure/sources/hello-source.yaml
-
-* And a _Image Policy_
-
-      flux create image policy hello-policy \
-      --image-ref=hello-source \
-      --namespace=infrastructure \
-      --select-semver=0.3.x \
-      --export > ./infrastructure/sources/hello-policy.yaml
-
-* Append to the  _Kustomization_ at `infrastructure/sources/kustomization.yaml`
-
-      apiVersion: kustomize.config.k8s.io/v1beta1
-      kind: Kustomization
-      resources:
-        - sealed-secrets-source.yaml
-        - ingress-nginx-source.yaml
-        - jetstack-source.yaml
-        - hello-source.yaml
-        - hello-policy.yaml
-
-* And add the image repository to the repo
-
-      git add infrastructure/sources/hello-source.yaml;
-      git add infrastructure/sources/hello-policy.yaml;
-      git add infrastructure/sources/kustomization.yaml;
-      git commit -m "Hello image repository files";
-      git push;
-      kubectl get imagerepository -A --watch
-
-* Then lets create a _base layer_
+* First lets create a _base layer_
 
       mkdir -p apps/base/hello
 
@@ -831,29 +797,6 @@ and change the app labels to just `hello`
             containers:
               - image: nginxdemos/hello:0.3
                 name: hello
-
-  For the _Hello_ deployment this is sufficent,
-  but for more normal workflows you should most likely add more e.g. resource limits, env-vars, secrets etc.
-
-  E.g.:
-
-      spec:
-        containers:
-          - image: gcr.io/somethingsomething:latest
-            name: something-container
-            ports:
-              - containerPort: 1234
-            resources:
-              requests:
-                memory: "250Mi"
-                cpu: "50m"
-              limits:
-                memory: "800Mi"
-                cpu: "250m"
-        imagePullSecrets:
-          - name: gcr-registry
-
-   That is out-of-scope for this tutorial though.
 
 * Add a service at `apps/base/hello/service.yaml`
 
@@ -925,7 +868,7 @@ and change the app labels to just `hello`
       bases:
         - hello
 
-* Add to the repo
+* Add it all to the repo
 
       git add apps/base/hello/deployment.yaml;
       git add apps/base/hello/service.yaml;
@@ -954,7 +897,7 @@ and change the app labels to just `hello`
       git add clusters/$DOUBLEDRAGON_CLUSTER/apps.yaml;
       git commit -m "Adding apps to the cluster";
       git push
-### Test application
+### Test Hello
 
 * Find the ingress controller's `External IP`
 
@@ -970,21 +913,263 @@ and change the app labels to just `hello`
 
 * This should show a basic hello world page, with an Nginx logo and some server address, name and date details.
 
-### Update application
+### Delete Hello
 
-* Updating the Docker image in the Docker registry should trigger a rollout to the cluster.
-   * If you have set up the _source_ to poll that image registry repo.
-* Update any settings in the e.g. `deployment.yaml`, commit and push, Flux will pick it up and roll out the changes.
-* Though in this instance as _Hello__ is a fairly static public Docker image, it rarely changes
+* Remove / comment out the app
 
-### Delete application
+  Normally you just edit `apps/overlay/$DOUBLEDRAGON_NAME/kustomizaton.yaml`
+  And comment out
 
-* Remove / comment out the app in `clusters/$DOUBLEDRAGON_CLUSTER/apps.yaml`
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      namespace: apps
+      bases:
+      #  - hello
+
+   But since this is the only app in there it might break the YAML.
+
+   So the easiert is to delete cluster's `apps.yaml` file
+
+      git rm clusters/$DOUBLEDRAGON_CLUSTER/apps.yaml;
+      git commit -m "Removing apps from the cluster";
+      git push
 
   That should cascade the changes via the aggregated _kustomize_, and remove the ingress, service and deployment from the live cluster.
 
 * If permanent, remove the app's `apps/overlays` and `apps/base` folders as well as a tidy-up chore.
 
+
+## Your first application
+
+Ok, so a _Hello world_ is not what you intended to use your cluster for.
+Lets see how you could add a real application to the cluster.
+
+For simplification lets call the app `myfirstapp`.
+Replace any reference to it with a correct name.
+
+### Deploy, Service, Ingress, Overlay
+
+These will be very similar to the _Hello_ app.
+
+* Names and labels
+
+  Change all the names and lables from `hello` to `myfirstapp`.
+
+* Deployment
+
+  One thing to change is the image name and tag, and adding a registry secret
+
+  E.g.:
+
+      spec:
+        containers:
+          - image: gcr.io/somethingsomething:1.2.3
+            name: myfirstapp-container
+         ...
+        imagePullSecrets:
+          - name: gcr-registry
+
+
+* More _deployment_ config
+
+  For the _Hello_ deployment the basic config was sufficient,
+  but for more normal workflows you will most likely add more e.g. resource limits, env-vars, secrets etc.
+
+  E.g.:
+
+      spec:
+        containers:
+          - image: gcr.io/somethingsomething:1.2.3
+            ...
+            resources:
+              requests:
+                memory: "250Mi"
+                cpu: "50m"
+              limits:
+                memory: "800Mi"
+                cpu: "250m"
+            env:
+              - name: SOMEVAR
+                value: "5"
+            envFrom:
+              - secretRef:
+                  name: some-secret
+
+   These are out-of-scope for this tutorial though.
+
+* Ingress
+
+  You will need to change the hostname in `hosts`, and possibly the paths if necessary.
+
+* Overlay
+
+  You could be clever with the overlay but for now just copy what _Hello_ did
+
+* Add it all to git
+
+      git add apps/base/myfirstapp/deployment.yaml;
+      git add apps/base/myfirstapp/service.yaml;
+      git add apps/base/myfirstapp/ingress.yaml;
+      git add apps/base/myfirstapp/kustomization.yaml;
+      git add overlay/$DOUBLE_DRAGON_CLUSTER/myfirstapp/kustomization.yaml;
+      git add overlay/$DOUBLE_DRAGON_CLUSTER/kustomization.yaml;
+      git commit -m "Added myfirstapp"
+
+### Registry and image repository
+
+* Registry
+
+  You would probably store your app's images in a private Docker registry.
+
+  Revisit the [Container registries](#container-registries) section to add relevant registry secrets.
+
+* Image repository
+
+  Lets add an __Image Repository__ for your application.
+  So that the _deployment_ below can scan and find the _Docker_ image it requires
+
+      flux create image repository myfirstapp-source \
+      --image=gcr.io/somethingsomething \
+      --interval=5m \
+      --namespace=infrastructure \
+      --export > infrastructure/sources/myfirstapp-source.yaml
+
+* Append this source to the _Kustomization_ at `infrastructure/sources/kustomization.yaml`
+
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      resources:
+        ...
+        - myfirstapp-source.yaml
+
+* Add to git
+
+      git add infrastructure/sources/myfirstapp-source.yaml;
+      git add infrastructure/sources/kustomization.yaml;
+      git commit -m "myfirstapp source";
+      git push
+
+
+### Test the application
+
+* Like _hello_ use `curl`
+
+      curl -H "Host: myfirstapp.example.com" \
+        --resolve myfirstapp.example.com:80:11.22.33.44 \
+        --resolve myfirstapp.example.com:443:11.22.33.44 \
+        http://myfirstapp.example.com | lynx -stdin
+
+   Replace `myfirstapp.example.com` with your hostname
+
+That should be the basics to get your first application added
+
+## Automatic image updates
+
+Letting _Flux_ automatically update the image if a newer one get uploaded to the _docker registry_ is a handy feature.
+
+_Flux_ allows different policies on when to update it, such as only when approved, only on major version upgrades and more.
+
+Here is how to update on every new [semver](https://semver.org/) tag:
+
+
+* Image repository
+
+  As shown above in the [Your first application](#your-first-application) section, you need an _image repository_ for your application
+
+* Image policies
+
+  Similarily we need a policy on how to act on any changes to the source repository
+
+      flux create image policy myfirstapp-policy \
+        --image-ref=myfirstapp-source \
+        --namespace=apps \
+        --select-semver=0.3.x \
+        --export > ./apps/base/myfirstapp/image-policy.yaml
+
+  This policy allows updates on any new `0.3.x` semver versions.
+  So if on `0.3.1` if `0.3.2` gets uploaded it will trigger this policy.
+  A new lower version of `0.3.0` would not.
+
+  However `0.4.0` will not get uploaded. Nor would `1.0.0`.
+  For that the `--select-semver` would have to be `0.x` or just `x` I think
+
+
+
+* Append this policy to the _Kustomization_ of the app `apps/base/myfirstapp/kustomization.yaml`
+
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      resources:
+        ...
+        - image-policy.yaml
+
+* Apply the policy
+
+  We need to tell _Flux_ where this policy would apply
+
+  Edit `apps/base/myfirstapp/deployment.yaml`
+  and modify the `image` line by appending the policy name
+
+      spec:
+        containers:
+          - image: gcr.io/something:0.3.2  # {"$imagepolicy": "apps:myfirstapp-policy "}
+            name: myfirstapp-container
+
+  This seems a bit hacky but this is how it works
+
+* Image Update
+
+  We also need to tell the `apps` kustomization about how to update any the images.
+  I.e. create a _git commit_.
+
+      flux create image update apps-image-update --namespace=apps \
+        --git-repo-ref=flux-system \
+        --git-repo-namespace=flux-system \
+        --git-repo-path="./" \
+        --checkout-branch=main \
+        --push-branch=main \
+        --author-name=fluxcdbot \
+        --author-email=fluxcdbot@users.noreply.github.com \
+        --commit-template="{{range .Updated.Images}}{{println .}}{{end}}" \
+        --export > apps/overlays/$DOUBLE_DRAGON_NAME/image-updates.yaml
+
+* Append to `apps/overlays/$DOUBLE_DRAGON_NAME/kustomization.yaml`
+
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      bases:
+        - myfirstapp
+        ...
+      resources:
+        ...
+        - image-updates.yaml
+
+* Add to the repo
+
+      git add apps/base/myfirstapp/deployment.yaml;
+      git add apps/base/myfirstapp/image-policy.yaml;
+      git add apps/base/myfirstapp/kustomization.yaml;
+      git add apps/overlays/$DOUBLE_DRAGON_NAME/image-updates.yaml;
+      git add apps/overlays/$DOUBLE_DRAGON_NAME/kustomization.yaml;
+      git commit -m "myfirstapp image policy";
+      git push
+
+
+* New versions
+
+  Any new images in the docker repository that is in the chosen semver version range will now automatically update the deployment.
+
+  Note: You need to wait for the various polling of the image repository, the policy, flux itself etc. So changes might take awhile.
+
+  An alternative is that _Flux_ also let policy changes be prompted via webhook, which is also possible.
+
+* Tail if the policy has updated
+
+      flux get image policy -n apps --watch
+
+  Or any image states
+
+      flux get images all --all-namespaces
 ## Go wild
 
 * Add/update your deployments, services, charts, docker registries, secrets, kustomizations etc
@@ -994,7 +1179,6 @@ and change the app labels to just `hello`
 1. Add source if in a private repo. And add/append to source _kustomization_.
 
    * `infrastructure/sources/someapp-source.yaml`
-   * `infrastructure/sources/someapp-policy.yaml`
    * `infrastructure/sources/kustomization.yaml`
    * `infrastructure/kustomization.yaml`
 
@@ -1003,6 +1187,7 @@ and change the app labels to just `hello`
    * `apps/base/someapp/deployment.yaml`
    * `apps/base/someapp/service.yaml`
    * `apps/base/someapp/ingress.yaml`
+   * `apps/base/someapp/image-policy.yaml`
 
 1. Add/append to apps _kustomization_ and overlay.
 
@@ -1089,6 +1274,36 @@ Frequent issues and how to monitor.
   Most of the time the _"removal"_ can be done by commenting out the reference to it in a `kustomization.yaml` file.
   Instead of removing actual _deployment_ etc git files and history.
 
+* Scale the deployments down and back up
+
+      kubectl scale deploy -n apps --replicas=0 myfirstapp-deployment
+
+  Wait until pods are destroyed
+
+      kubectl get pods -n apps --watch
+
+  Then scale back up
+
+      kubectl scale deploy -n apps --replicas=2 myfirstapp-deployment
+
+  Note, sometimes _flux_ notices the inconsistency and scales the app back up as well before you do.
+
+* Force _flux_ do reconcile the cluster state and the repository state
+
+  If impatient
+
+       flux reconcile kustomization apps --with-source
+
+## Removing _Flux_
+
+The nuclear option. But sometimes neccessary.
+
+    flux uninstall --namespace=flux-system
+
+Though usually I just spin up another cluster instead.
+
+Note, any encrypted secrets will have to be re-sealed when re-installing _flux_
+
 ## Add another cluster
 
 * Now that you have a working cluster, scrap it. If you want to.
@@ -1110,10 +1325,12 @@ Frequent issues and how to monitor.
 * Maybe export a new env-var (and old ones if no longer set)
 
        # In Bash:
+       export DOUBLEDRAGON_REPO=doubledragon-fleet;
        export DOUBLEDRAGON_CLUSTER=doubledragon-01;
        export DOUBLEDRAGON_CLUSTER_NEW=doubledragon-02
 
        # In Fish:
+       set -x DOUBLEDRAGON_REPO doubledragon-fleet;
        set -x DOUBLEDRAGON_CLUSTER doubledragon-01;
        set -x DOUBLEDRAGON_CLUSTER_NEW doubledragon-02
 
@@ -1261,6 +1478,11 @@ Frequent issues and how to monitor.
 
    * [keel.sh](https://keel.sh)
 
+
+   * [github.com/stern/stern](https://github.com/stern/stern)
+
+         brew install stern
+
 * [flurdy.com/docs/kubernetes/registry/kubernetes-docker-registry.html](https://flurdy.com/docs/kubernetes/registry/kubernetes-docker-registry.html)
 * [ramitsurana.github.io/awesome-kubernetes/](https://ramitsurana.github.io/awesome-kubernetes/)
 
@@ -1285,6 +1507,7 @@ Though please attribute back if possible.
 
 ### Versions
 
+* 2023-03-21 Your first app and image updates
 * 2023-02-09 Double Dragon tweaks and env-vars
 * 2022-11-10 Double Dragon refreshed
 * 2021-07-10 Flux 2. Lemmings => Double Dragon
