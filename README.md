@@ -99,7 +99,7 @@ At the same time set the `GITHUB_USER` env-var to your github username.
 
       brew install gh;
       gh auth login;
-      gh repo create --private doubledragon-fleet -r origin;
+      gh repo create --private doubledragon-fleet -r origin -s .
 
   Note, the CLI for some reason does not like if Github PAT env-var is set so you may have to temporarily unset when using it.
 
