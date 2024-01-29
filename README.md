@@ -153,12 +153,13 @@ At the same time set the `GITHUB_USER` env-var to your github username.
 ### Bootstrap Flux on your cluster
 
     flux bootstrap github \
+	   --token-auth=false \
       --components-extra=image-reflector-controller,image-automation-controller \
       --owner=$GITHUB_USER \
       --repository=$DOUBLEDRAGON_REPO \
       --branch=main \
       --path=./clusters/$DOUBLEDRAGON_CLUSTER \
-      --read-write-key \
+      --read-write-key=true \
       --personal
 
 * This will create a github repo set in `$DOUBLEDRAGON_REPO` if it does not already exist.
