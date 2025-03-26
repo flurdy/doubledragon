@@ -434,23 +434,29 @@ e.g. a GKE cluster.
         - ingress-nginx-source.yaml
         - jetstack-source.yaml
 
-* Install Cert Manager Helm and CRDs
+* Define Cert Manager Helm properties
 
-  You need some _CustomResourceDefinitions_ for _cert-manager_ to work
 
       mkdir infrastructure/cert-manager;
 
-      curl -Lo infrastructure/cert-manager/cert-manager-crds.yaml \
-      https://github.com/cert-manager/cert-manager/releases/download/v1.10.1/cert-manager.crds.yaml;
+  * Edit `infrastructure/cert-manager/values.yaml`
+
+        crds:
+          enabled: true
+        
+
+* Install Cert Manager Helm
 
       flux create helmrelease cert-manager \
-        --interval=1h \
-        --release-name=cert-manager \
-        --namespace=infrastructure \
-        --source=HelmRepository/jetstack-source \
         --chart=cert-manager \
-        --chart-version=">=1.10.1" \
-        --crds=CreateReplace \
+        --source=HelmRepository/jetstack-source.infrastructure \
+        --release-name=cert-manager \
+        --namespace=infrastructure \  
+        --target-namespace cert-manager \
+        --create-target-namespace \
+        --chart-version=">=1.12.0" \
+        --interval=1h \
+        --values=infrastructure/cert-manager/values.yaml \
         --export > infrastructure/cert-manager/cert-manager.yaml
 
 
@@ -459,7 +465,6 @@ e.g. a GKE cluster.
         apiVersion: kustomize.config.k8s.io/v1beta1
         kind: Kustomization
         resources:
-        - cert-manager-crds.yaml
         - cert-manager.yaml
 
   * Append it to infrastructure kustomization `infrastructure/kustomization.yaml`
@@ -476,7 +481,6 @@ e.g. a GKE cluster.
 
       git add infrastructure/sources/jetstack-source.yaml;
       git add infrastructure/sources/kustomization.yaml;
-      git add infrastructure/cert-manager/cert-manager-crds.yaml;
       git add infrastructure/cert-manager/cert-manager.yaml;
       git add infrastructure/cert-manager/kustomization.yaml;
       git add infrastructure/kustomization.yaml;
@@ -1528,9 +1532,11 @@ Though please attribute back if possible.
    * [fluxcd.io/flux](https://fluxcd.io/flux/)
 * Kubernetes official docs
    * [kubernetes.io/docs/](https://kubernetes.io/docs/)
+   * [cert-manager.io/docs/](https://cert-manager.io/docs/installation/continuous-deployment-and-gitops/)
 
 ### Versions
 
+* 2025-03-25 Updated for Flux 2.5
 * 2023-03-21 Your first app and image updates
 * 2023-02-09 Double Dragon tweaks and env-vars
 * 2022-11-10 Double Dragon refreshed
