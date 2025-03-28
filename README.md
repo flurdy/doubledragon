@@ -43,6 +43,7 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
    1. [Hello world application](#hello-world-application)
    1. [Your first application](#your-first-application)
    1. [Automatic image updates](#automatic-image-updates)
+1. [Go wild](#go-wild)
 1. [Further information](#further-information)
    1. [Advise: Don't touch](#advise-dont-touch)
    1. [Troubleshooting](#troubleshooting)
@@ -540,47 +541,48 @@ Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt]
 
   I.e. add a TLS certificate to an ingress.
 
-  These steps may have to wait until you add your own apps later on in the tutorial.
+  > [!NOTE] 
+  > This step may have to wait until you add your own apps later on in the tutorial.
 
-* Edit your app's _ingress_ `apps/base/someapp/ingress.yaml`
+  * Edit your app's _ingress_ `apps/base/someapp/ingress.yaml`
 
-  Add the annotation and _tls_ sections
+    Add the annotation and _tls_ sections
 
-      apiVersion: networking.k8s.io/v1
-      kind: Ingress
-      metadata:
-        annotations:
-          cert-manager.io/cluster-issuer: letsencrypt-staging
-        name: someapp-ingress
-        namespace: apps
-      spec:
-        rules:
-        - host: someapp.example.com
-          http:
-            paths:
-            - pathType: Prefix
-              path: /
-              backend:
-                service:
-                  name: someapp-service
-                  port:
-                    number: 80
-        tls:
-        - hosts:
-          - someapp.example.com
-          secretName: someapp-cert-staging
+        apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        metadata:
+          annotations:
+            cert-manager.io/cluster-issuer: letsencrypt-staging
+          name: someapp-ingress
+          namespace: apps
+        spec:
+          rules:
+          - host: someapp.example.com
+            http:
+              paths:
+              - pathType: Prefix
+                path: /
+                backend:
+                  service:
+                    name: someapp-service
+                    port:
+                      number: 80
+          tls:
+          - hosts:
+            - someapp.example.com
+            secretName: someapp-cert-staging
 
-* Add to git
+  * Add to git
 
-      git add apps/base/someapp/ingress.yaml;
-      git commit -m "Secured someapp";
-      git push;
-      kubectl get ingress -n apps --watch
+        git add apps/base/someapp/ingress.yaml;
+        git commit -m "Secured someapp";
+        git push;
+        kubectl get ingress -n apps --watch
 
-  Soon the `someapp.example.com` line will show 443 as available port. It all ok.
+    Soon the `someapp.example.com` line will show 443 as available port. It all ok.
 
-  Note, your browser will throw a warning when accessing this site
-  as the certificate for staging is not signed. Unlike prod.
+    Note, your browser will throw a warning when accessing this site
+    as the certificate for staging is not signed. Unlike prod.
 
 * Now lets add a prod issuer, create and edit
 
@@ -610,6 +612,9 @@ Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt]
 
 * Update the certificate for your app
 
+  > [!NOTE] 
+  > Again, only after you have added your own apps later on in the tutorial.
+
   Change the `cluster-issuer` annotation and `secretName` in
 
   `apps/base/someapp/ingress.yaml`
@@ -638,12 +643,13 @@ Lets create a _staging_ and _production_ certificate issuers with [Lets Encrypt]
           - someapp.example.com
           secretName: someapp-cert-prod
 
-* Push and check when the certificate change goes live
+  * Push and check when the certificate change goes live
 
-      git add apps/base/someapp/ingress.yaml;
-      git commit -m "Secured someapp with prod cert";
-      git push;
-      kubectl describe ingress someapp-ingress -n apps --watch
+        git add apps/base/someapp/ingress.yaml;
+        git commit -m "Secured someapp with prod cert";
+        git push;
+        kubectl describe ingress someapp-ingress -n apps --watch
+        
 ### Container Registries
 
 To access private Docker container image repositories
@@ -654,6 +660,10 @@ And some secrets to access those.
 * Please follow [flurdy's 'kubernetes-docker-registry guide'](https://flurdy.com/docs/kubernetes/registry/kubernetes-docker-registry.html) for your relevant registries.
 
 #### GCR Google Container Registry
+
+>[!WARNING]
+> GCR has been deprecated and replaced by Google Artifact Registry.
+> This is only as an example of how you would seal and add any registry to your cluster
 
 * For example if you needed [GCR](https://cloud.google.com/container-registry/),
   and have followed the guide above and got a `gcr-registry.yml` file (or `.yaml`),
@@ -671,14 +681,14 @@ And some secrets to access those.
       mkdir -p clusters/$DOUBLEDRAGON_CLUSTER/registries/apps;
       mkdir -p clusters/$DOUBLEDRAGON_CLUSTER/registries/infrastructure
 
-  A registry secret for both the apps namespace
+  A registry secret for both the _apps_ namespace
 
       kubeseal --format=yaml --namespace=apps \
       --cert=clusters/$DOUBLEDRAGON_CLUSTER/secrets/sealed-secrets-cert.pem \
       < gcr-registry.yml \
       > clusters/$DOUBLEDRAGON_CLUSTER/registries/apps/sealed-gcr-registry.yaml
 
-   and the infrastructure namespace
+   and the _infrastructure_ namespace
 
       kubeseal --format=yaml --namespace=infrastructure \
       --cert=clusters/$DOUBLEDRAGON_CLUSTER/secrets/sealed-secrets-cert.pem \
@@ -746,7 +756,6 @@ And some secrets to access those.
 * Add to git/flux
 
       git add infrastructure/sources/someapp-source.yaml;
-      git add infrastructure/sources/someapp-policy.yaml;
       git add infrastructure/sources/kustomization.yaml;
       git commit -m "Sources for someapp"
       git push
@@ -1509,6 +1518,9 @@ Note, any encrypted secrets will have to be re-sealed when re-installing _flux_ 
 
 * [keel.sh](https://keel.sh)
 
+* [headlamp.dev](https://headlamp.dev)
+   
+  * [headlamp.dev/blog/2025/03/26/flux-ui-updates](https://headlamp.dev/blog/2025/03/26/flux-ui-updates)
 
 * [github.com/stern/stern](https://github.com/stern/stern)
 
@@ -1522,7 +1534,7 @@ Client tools are also available on Linux, Windows and more.
 ### License
 
 
-The _Lemmings_ and _Double Dragon_ code bases are licensed under the _MIT_ license which lets you pretty much do as you please with it.
+The _Lemmings_ and _Double Dragon_ code bases are licensed under the _MIT license_ which lets you pretty much do as you please with it.
 
 Though please attribute back if possible.
 
@@ -1532,7 +1544,7 @@ Though please attribute back if possible.
    * [fluxcd.io/flux](https://fluxcd.io/flux/)
 * Kubernetes official docs
    * [kubernetes.io/docs/](https://kubernetes.io/docs/)
-   * [cert-manager.io/docs/](https://cert-manager.io/docs/installation/continuous-deployment-and-gitops/)
+* [cert-manager.io/docs/](https://cert-manager.io/docs/installation/continuous-deployment-and-gitops/)
 
 ### Versions
 
