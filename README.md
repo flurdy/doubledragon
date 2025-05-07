@@ -154,7 +154,7 @@ At the same time set the `GITHUB_USER` env-var to your github username.
 ### Bootstrap Flux on your cluster
 
     flux bootstrap github \
-	   --token-auth=false \
+      --token-auth=false \
       --components-extra=image-reflector-controller,image-automation-controller \
       --owner=$GITHUB_USER \
       --repository=$DOUBLEDRAGON_REPO \
@@ -1231,9 +1231,62 @@ Here is how to update on every new [semver](https://semver.org/) tag:
 
    (Some of the _Kustomization_ files can be short-cutted if they do nothing but redirect)
 
-## Further information
+## Monitoring
 
----
+Optionally you may want to set up monitoring of the cluster, with metrics and logging.
+
+Flux has a ready made example of how to set up a Prometheus and Loki stack to achieve this.
+
+* https://github.com/fluxcd/flux2-monitoring-example
+
+And some genearl guidance on setting this up 
+
+* https://fluxcd.io/flux/monitoring/
+* https://fluxcd.io/flux/monitoring/metrics/#monitoring-setup
+
+### Setting up Monitoring 
+
+* Clone the example repo locally.
+* Copy the `monitoring.yaml` from that repo's cluster folder into your cluster.
+  * [flux2-monitoring-example/clusters/test/monitoring.yaml](https://github.com/fluxcd/flux2-monitoring-example/blob/main/clusters/test/monitoring.yaml)
+    => `cluster/$DOUBLE_DRAGON_NAME/monitoring.yaml` 
+* Copy over the entire `monitoring` folder into your Flux repo.
+  * [flux2-monitoring-example/monitoring](https://github.com/fluxcd/flux2-monitoring-example/tree/main/monitoring)
+   => `./monitoring`
+* Modify the Prometheus Helm values for `podMonitorNamespaceSelector` to include other namespaces if tagged
+  * [monitoring/controllers/kube-prometheus-stack/release.yaml](https://github.com/fluxcd/flux2-monitoring-example/blob/main/monitoring/controllers/kube-prometheus-stack/release.yaml#L36)
+  * ```
+    podMonitorNamespaceSelector: 
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring  
+    ```
+* Modify the existing namespaces to include a *monitoring* label
+  * `cluster/doubledragon/namespaces.yaml`
+  * ``` 
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+    name: infrastructure
+    labels:
+      app.kubernetes.io/component: monitoring
+    ---
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: apps
+      labels:
+        app.kubernetes.io/component: monitoring
+    ```
+* Patience. It takes a while to set up and syncronise itself.
+
+* You do not need to expose the Grafana UI to the world. 
+  Setting up a tunnel instead works fine
+  *  ```
+     kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80
+     ```
+  * [localhost:3000/d/flux-cluster](http://localhost:3000/d/flux-cluster/flux-cluster-stats)
+  
+
 ## Advise: Don't touch
 
 * Once Flux is running, by convention avoid using `kubectl create|apply` etc.
@@ -1377,6 +1430,7 @@ Note, any encrypted secrets will have to be re-sealed when re-installing _flux_ 
 * Bootstrap the new cluster with `doubledragon-02` or `$DOUBLEDRAGON_CLUSTER_NEW` as the name
 
       flux bootstrap github \
+        --token-auth=false \
         --components-extra=image-reflector-controller,image-automation-controller \
         --owner=$GITHUB_USER \
         --repository=$DOUBLEDRAGON_REPO \
