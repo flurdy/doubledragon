@@ -44,8 +44,9 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
    1. [Your first application](#your-first-application)
    1. [Automatic image updates](#automatic-image-updates)
 1. [Go wild](#go-wild)
-1. [Monitoring](#monitoring)
 1. [Further information](#further-information)
+   1. [Monitoring](#monitoring)
+   1. [Auto scaling](#auto-scaling)
    1. [Advise: Don't touch](#advise-dont-touch)
    1. [Troubleshooting](#troubleshooting)
    1. [Add another cluster](#add-another-cluster)
@@ -1300,6 +1301,93 @@ And some genearl guidance on setting this up
      ```
   * [localhost:3000/d/flux-cluster](http://localhost:3000/d/flux-cluster/flux-cluster-stats)
   
+## Auto scaling
+
+Kubernetes can be configured to auto scale your nodes if increased loads/pods.
+This is usually configured using the provider's UI, or CLI tool.
+
+However many will rely on your cluster having the [metrics-server](https://github.com/kubernetes-sigs/metrics-server/) installed.
+
+Contrary to the name, this service is only metrics related for auto-scaling. 
+Actual metrics will be better served with the Prometheus stack mentioned above.
+
+* Add the Helm source
+
+  ```
+  flux create source helm metrics-server-source \
+  --interval=1h \
+  --namespace=infrastructure \
+  --url=https://kubernetes-sigs.github.io/metrics-server/ \
+  --export > infrastructure/sources/metrics-server-source.yaml
+  ```
+
+* Edit `infrastructure/sources/kustomization.yaml`
+
+  and append `- metrics-server-source.yaml` to it
+
+  ```
+  apiVersion: kustomize.config.k8s.io/v1beta1
+  kind: Kustomization
+  resources:
+  ....
+  - metrics-server-source.yaml
+  ```
+
+* Add source to git
+
+  ```
+  git add infrastructure/sources/metrics-server-source.yaml;
+  git add infrastructure/sources/kustomization.yaml;
+  git commit -m "Metrics server source"
+  ```
+
+* Install the Helm chart
+
+  ```
+  mkdir -p infrastructure/metrics-server;
+
+  flux create helmrelease metrics-server \
+    --interval=1h \
+    --release-name=metrics-server \
+    --namespace=infrastructure \
+    --target-namespace=infrastructure \
+    --source=HelmRepository/metrics-server-source \
+    --chart=metrics-server \
+    --chart-version=">=0.7.2" \
+    --crds=CreateReplace \
+    --export > infrastructure/metrics-server/metrics-server.yaml
+  ```
+
+* Create `infrastructure/metrics-server/kustomization.yaml`
+
+  ```
+  apiVersion: kustomize.config.k8s.io/v1beta1
+  kind: Kustomization
+  resources:
+  - metrics-server.yaml
+  ```
+
+* Edit `infrastructure/kustomization.yaml`
+
+  and append `- metrics-server` to it
+
+  ```
+  apiVersion: kustomize.config.k8s.io/v1beta1
+  kind: Kustomization
+  resources:
+  ....
+  - metrics-server
+  ```
+ 
+* Push to git
+
+  ```
+  git add infrastructure/metrics-server/metrics-server.yaml;
+  git add infrastructure/metrics-server/kustomization.yaml;
+  git add infrastructure/kustomization.yaml;
+  git commit -m "Adding metrics server";
+  git push
+  ```
 
 ## Advise: Don't touch
 
