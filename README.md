@@ -1232,6 +1232,9 @@ Here is how to update on every new [semver](https://semver.org/) tag:
 
    (Some of the _Kustomization_ files can be short-cutted if they do nothing but redirect)
 
+
+## Further information
+
 ## Monitoring
 
 Optionally you may want to set up monitoring of the cluster, with metrics and logging.
@@ -1278,6 +1281,16 @@ And some genearl guidance on setting this up
       labels:
         app.kubernetes.io/component: monitoring
     ```
+* Add to git, push and wait
+  ```
+  git add cluster/$DOUBLE_DRAGON_NAME/monitoring.yaml;
+  git add monitoring;
+  git add -p cluster/$DOUBLE_DRAGON_NAME/namespaces.yaml;
+  git commit -m "Added monitoring";
+  git push;
+  flux reconcile kustomization infrastructure --with-source;
+  kubectl get pods -A --watch
+  ```
 * Patience. It takes a while to set up and syncronise itself.
 
 * You do not need to expose the Grafana UI to the world. 
@@ -1287,8 +1300,6 @@ And some genearl guidance on setting this up
      ```
   * [localhost:3000/d/flux-cluster](http://localhost:3000/d/flux-cluster/flux-cluster-stats)
   
-
-## Further information
 
 ## Advise: Don't touch
 
