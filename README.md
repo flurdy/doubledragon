@@ -44,6 +44,7 @@ Includes Flux, Helm, cert-manager, Nginx Ingress and Sealed Secrets.
    1. [Your first application](#your-first-application)
    1. [Automatic image updates](#automatic-image-updates)
 1. [Go wild](#go-wild)
+1. [Monitoring](#monitoring)
 1. [Further information](#further-information)
    1. [Advise: Don't touch](#advise-dont-touch)
    1. [Troubleshooting](#troubleshooting)
@@ -1286,6 +1287,8 @@ And some genearl guidance on setting this up
      ```
   * [localhost:3000/d/flux-cluster](http://localhost:3000/d/flux-cluster/flux-cluster-stats)
   
+
+## Further information
 
 ## Advise: Don't touch
 
